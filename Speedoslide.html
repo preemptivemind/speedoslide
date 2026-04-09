@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15 Puzzle</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  background: #f5f5f5;
+  color: #333;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Top nav ── */
+.topbar {
+  width: 100%; background: #fff; border-bottom: 1px solid #ddd;
+  display: flex; align-items: center; padding: 0 20px; height: 44px; gap: 20px;
+}
+.topbar-title { font-size: 15px; font-weight: 700; color: #333; letter-spacing: .5px; }
+.topbar-tabs  { display: flex; height: 100%; gap: 2px; }
+.topbar-tab {
+  padding: 0 14px; height: 100%; display: flex; align-items: center;
+  font-size: 13px; font-weight: 500; color: #888; cursor: pointer;
+  border: none; background: none; border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.topbar-tab:hover { color: #444; }
+.topbar-tab.active { color: #1565c0; border-bottom-color: #1565c0; }
+
+/* ── Layout ── */
+.page {
+  display: flex; gap: 16px; padding: 16px;
+  width: 100%; max-width: 1000px; align-items: flex-start; justify-content: center;
+}
+.col-left  { width: 200px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+.col-center{ display: flex; flex-direction: column; align-items: center; gap: 10px; flex-shrink: 0; }
+.col-right { width: 200px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+
+/* ── Box panels ── */
+.box { background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden; }
+.box-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  color: #999; padding: 6px 10px 5px; border-bottom: 1px solid #f0f0f0;
+}
+.box-body { padding: 8px 10px; }
+
+/* ── Stat rows ── */
+.stat-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 3px 0; border-bottom: 1px solid #f5f5f5;
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-name { font-size: 11px; color: #888; }
+.stat-val  { font-size: 13px; font-weight: 700; color: #222; font-variant-numeric: tabular-nums; }
+.stat-val.accent { color: #1565c0; }
+.stat-val.green  { color: #2e7d32; }
+.stat-val.orange { color: #e65100; }
+
+/* ── Buttons ── */
+.btn {
+  display: block; width: 100%; padding: 6px 10px; border: 1px solid #ddd;
+  border-radius: 3px; background: #fff; color: #555; font-family: inherit;
+  font-size: 12px; font-weight: 500; cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+  text-align: center;
+}
+.btn:hover { background: #f0f4ff; border-color: #1565c0; color: #1565c0; }
+.btn + .btn { margin-top: 5px; }
+.btn.primary { background: #1565c0; border-color: #1565c0; color: #fff; }
+.btn.primary:hover { background: #0d47a1; }
+.btn.danger  { color: #c62828; border-color: #ef9a9a; }
+.btn.danger:hover { background: #fff5f5; }
+
+/* ── Toggles ── */
+.tog-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; border-bottom: 1px solid #f5f5f5;
+}
+.tog-row:last-child { border-bottom: none; }
+.tog-label { font-size: 11px; color: #888; }
+.tog-group { display: flex; border: 1px solid #ddd; border-radius: 3px; overflow: hidden; }
+.tog-btn {
+  padding: 3px 7px; font-size: 10px; font-weight: 500; font-family: inherit;
+  background: #fff; border: none; color: #999; cursor: pointer; transition: background .12s, color .12s;
+  border-right: 1px solid #ddd;
+}
+.tog-btn:last-child { border-right: none; }
+.tog-btn.active { background: #1565c0; color: #fff; }
+.tog-btn:hover:not(.active) { background: #f0f4ff; color: #1565c0; }
+
+/* ── Slider ── */
+.slider-row { padding: 4px 0; border-bottom: 1px solid #f5f5f5; }
+.slider-row:last-child { border-bottom: none; }
+.slider-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.slider-label { font-size: 11px; color: #888; }
+.slider-val   { font-size: 11px; font-weight: 700; color: #1565c0; }
+input[type=range] {
+  width: 100%; height: 4px; accent-color: #1565c0; cursor: pointer;
+}
+
+/* ── Timer display ── */
+.timer-bar { display: flex; gap: 8px; align-items: stretch; }
+.timer-box {
+  background: #fff; border: 1px solid #e0e0e0; border-radius: 4px;
+  padding: 6px 12px; text-align: center; flex: 1;
+}
+.timer-box .t-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #bbb; margin-bottom: 1px; }
+.timer-box .t-val   { font-size: 24px; font-weight: 300; color: #222; font-variant-numeric: tabular-nums; line-height: 1; }
+.timer-box .t-val.running { color: #1565c0; }
+.timer-box .t-val.opt     { font-size: 20px; color: #e65100; }
+.timer-box .t-val.opt.exact { color: #2e7d32; }
+
+/* ── Grid wrapper ── */
+.grid-wrap { position: relative; }
+.grid {
+  display: grid;
+  gap: 0;
+  background: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+/* ── Tiles ── */
+.tile {
+  border-radius: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  cursor: grab;
+  position: relative;
+}
+.tile:not(.empty):active { cursor: grabbing; }
+.tile.empty {
+  background: #e8e8e8 !important;
+  border: none !important;
+  cursor: default;
+}
+.grid, .tile {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+.tile.hl { outline: 2px solid rgba(21,101,192,.7) !important; outline-offset: -3px; filter: brightness(1.15); }
+.hover-mode .tile:not(.empty) { cursor: crosshair; }
+
+/* ── Overlay ── */
+.overlay {
+  position: absolute; inset: 0; border-radius: 4px;
+  background: rgba(255,255,255,.92);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.overlay.show { opacity: 1; }
+.ov-title { font-size: 26px; font-weight: 700; color: #1565c0; }
+.ov-title.pb { color: #2e7d32; }
+.ov-time  { font-size: 34px; font-weight: 300; color: #222; font-variant-numeric: tabular-nums; }
+.ov-sub   { font-size: 12px; color: #888; }
+.ov-opt   { font-size: 11px; color: #e65100; }
+.ov-next  { font-size: 11px; color: #1565c0; margin-top: 4px; animation: blink 1s ease-in-out infinite alternate; }
+@keyframes blink { from{opacity:.3} to{opacity:1} }
+@keyframes tile-pop { 0%{transform:scale(1)} 40%{transform:scale(1.1)} 100%{transform:scale(1)} }
+.tile.popping { animation: tile-pop .3s ease-out forwards; }
+
+/* ── Solve log ── */
+.log-wrap { max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ddd transparent; }
+.log-wrap::-webkit-scrollbar { width: 4px; }
+.log-wrap::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+.log-hdr, .log-row {
+  display: grid; grid-template-columns: 18px 1fr 32px 42px;
+  gap: 6px; font-size: 10px; padding: 3px 0; border-bottom: 1px solid #f5f5f5; align-items: center;
+}
+.log-hdr { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #bbb; border-bottom-color: #eee; }
+.log-row:last-child { border-bottom: none; }
+.log-n  { color: #ccc; font-size: 9px; }
+.log-t  { color: #1565c0; font-weight: 500; font-variant-numeric: tabular-nums; }
+.log-m  { color: #555; text-align: right; font-variant-numeric: tabular-nums; }
+.log-o  { color: #e65100; text-align: right; font-size: 9px; font-variant-numeric: tabular-nums; }
+.log-pb { color: #2e7d32; font-size: 9px; font-weight: 700; text-align: right; }
+.log-empty { font-size: 11px; color: #bbb; text-align: center; padding: 10px 0; }
+
+/* ── Custom scramble section ── */
+.scramble-input-wrap { display: flex; gap: 4px; margin-top: 5px; }
+.scramble-input {
+  flex: 1; padding: 5px 7px; border: 1px solid #ddd; border-radius: 3px;
+  font-family: 'Roboto Mono', monospace; font-size: 11px; color: #333;
+  outline: none; user-select: text; -webkit-user-select: text;
+}
+.scramble-input:focus { border-color: #1565c0; }
+.scramble-input.invalid { border-color: #c62828; }
+.scramble-input.valid   { border-color: #2e7d32; }
+.scramble-hint { font-size: 10px; color: #aaa; margin-top: 3px; line-height: 1.4; }
+.solvability-badge {
+  display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px;
+  border-radius: 10px; margin-top: 4px;
+}
+.solvability-badge.solvable   { background: #e8f5e9; color: #2e7d32; }
+.solvability-badge.unsolvable { background: #ffebee; color: #c62828; }
+.solvability-badge.empty      { background: #f5f5f5; color: #aaa; }
+
+/* ── Freestyle note ── */
+.fs-note { font-size: 11px; color: #aaa; text-align: center; }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .page { flex-direction: column; align-items: center; }
+  .col-left, .col-right { width: 100%; max-width: 400px; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .col-left > *, .col-right > * { flex: 1 1 45%; min-width: 140px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">N Puzzle</span>
+  <div class="topbar-tabs">
+    <button class="topbar-tab active" id="tab-timed" onclick="setMode('timed')">Timed</button>
+    <button class="topbar-tab"        id="tab-free"  onclick="setMode('free')">Freestyle</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- LEFT -->
+  <div class="col-left">
+
+    <div class="box">
+      <div class="box-title">Live</div>
+      <div class="box-body">
+        <div class="stat-row"><span class="stat-name">Timer</span>  <span class="stat-val accent" id="l-time">—</span></div>
+        <div class="stat-row"><span class="stat-name">Moves</span>  <span class="stat-val"        id="l-moves">0</span></div>
+        <div class="stat-row"><span class="stat-name">Optimal</span><span class="stat-val orange" id="l-opt">…</span></div>
+        <div class="stat-row"><span class="stat-name">Solves</span> <span class="stat-val"        id="l-solves">0</span></div>
+      </div>
+    </div>
+
+    <div class="box" id="box-session">
+      <div class="box-title">Session</div>
+      <div class="box-body">
+        <div class="stat-row"><span class="stat-name">Best</span> <span class="stat-val green" id="s-best">—</span></div>
+        <div class="stat-row"><span class="stat-name">Ao5</span>  <span class="stat-val"       id="s-ao5">—</span></div>
+        <div class="stat-row"><span class="stat-name">Ao12</span> <span class="stat-val"       id="s-ao12">—</span></div>
+        <div class="stat-row"><span class="stat-name">Mean</span> <span class="stat-val"       id="s-mean">—</span></div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-title">Controls</div>
+      <div class="box-body">
+        <button class="btn primary" onclick="newGame()">New Game</button>
+        <button class="btn" id="btn-scramble" style="display:none" onclick="doScramble()">Random Scramble</button>
+        <button class="btn" id="btn-solved" style="display:none" onclick="goSolved()">Solved Position</button>
+        <button class="btn" id="btn-resetmoves" style="display:none" onclick="resetMoves()">Reset Movecount</button>
+        <button class="btn danger" onclick="clearAll()">Clear Scores</button>
+      </div>
+    </div>
+
+    <!-- Custom scramble (both modes) -->
+    <div class="box" id="scramble-section">
+      <div class="box-title">Custom Scramble</div>
+      <div class="box-body">
+        <div class="scramble-hint" id="cs-hint">Enter numbers 0–15 separated by spaces. 0 = blank.</div>
+        <div class="scramble-input-wrap">
+          <input type="text" class="scramble-input" id="cs-input" placeholder="1 2 3 … 0" oninput="onCustomInput()">
+        </div>
+        <div id="cs-badge" class="solvability-badge empty">—</div>
+        <button class="btn primary" id="cs-apply" onclick="applyCustom()" style="margin-top:5px;display:none">Apply</button>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-title">All-Time Best</div>
+      <div class="box-body">
+        <div class="stat-row"><span class="stat-name">Single</span><span class="stat-val green" id="b-single">—</span></div>
+        <div class="stat-row"><span class="stat-name">Moves</span> <span class="stat-val green" id="b-moves">—</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CENTER -->
+  <div class="col-center">
+
+    <div class="timer-bar" style="width:100%">
+      <div class="timer-box" id="tb-time-box"><div class="t-label" id="tb-lbl">Time</div><div class="t-val running" id="tb-time">0:00.000</div></div>
+      <div class="timer-box"><div class="t-label">Moves</div><div class="t-val" id="tb-moves">0</div></div>
+      <div class="timer-box" id="tb-tps-box"><div class="t-label">TPS</div><div class="t-val" id="tb-tps">0.0</div></div>
+      <div class="timer-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt">…</div></div>
+    </div>
+
+    <div class="grid-wrap">
+      <div class="grid" id="grid"></div>
+      <div class="overlay" id="overlay">
+        <div class="ov-title" id="ov-title">Solved</div>
+        <div class="ov-time"  id="ov-time">0:00.0</div>
+        <div class="ov-sub"   id="ov-sub">0 moves</div>
+        <div class="ov-opt"   id="ov-opt"></div>
+        <div class="ov-next">Next scramble in 2s…</div>
+      </div>
+    </div>
+
+    <div class="fs-note" id="fs-note" style="display:none">Freestyle — board starts solved. No timer.</div>
+
+  </div>
+
+  <!-- RIGHT -->
+  <div class="col-right">
+
+    <div class="box">
+      <div class="box-title">Display</div>
+      <div class="box-body">
+        <div class="tog-row">
+          <span class="tog-label">Control</span>
+          <div class="tog-group">
+            <button class="tog-btn active" id="tog-click"   onclick="setControl('click')">Click</button>
+            <button class="tog-btn"        id="tog-drag"    onclick="setControl('drag')">Dragslide</button>
+            <button class="tog-btn"        id="tog-hover"   onclick="setControl('hover')">Hover</button>
+          </div>
+        </div>
+        <div class="tog-row">
+          <span class="tog-label">Colors</span>
+          <div class="tog-group">
+            <button class="tog-btn active" id="tog-rainbow" onclick="setScheme('none')">None</button>
+            <button class="tog-btn"        id="tog-layer"   onclick="setScheme('layer')">Layer</button>
+            <button class="tog-btn"        id="tog-fringe"  onclick="setScheme('fringe')">Fringe</button>
+          </div>
+        </div>
+        <div class="slider-row">
+          <div class="slider-top">
+            <span class="slider-label">Size</span>
+            <span class="slider-val" id="size-val">4 × 4</span>
+          </div>
+          <input type="range" id="size-slider" min="3" max="10" value="4" oninput="onSizeChange(this.value)">
+        </div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-title">Solve Log</div>
+      <div class="box-body" style="padding:8px 10px">
+        <div class="log-hdr"><span>#</span><span>Time</span><span style="text-align:right">Mv</span><span style="text-align:right">TPS</span></div>
+        <div class="log-wrap" id="log-wrap"><div class="log-empty">No solves yet</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+var mode    = 'timed';
+var control = 'click';   // 'click' | 'drag' | 'hover'
+var scheme  = 'none'; // 'none' | 'layer' | 'fringe'
+var N       = 4;         // board size NxN
+var tiles   = [];        // length N*N, 0=blank
+var moves   = 0;
+var started = false;
+var finished= false;
+var timerMs = 0;
+var rafId   = null;
+var rafT0   = 0;
+var solves  = 0;
+
+// persist
+var solveTimes   = [];
+var solveMoves   = [];
+var solveOpts    = [];
+var solveTps     = [];
+var bestSingle   = null;
+var bestMovesVal = null;
+
+// solver
+var currentOptimal = null;
+var solverToken    = 0;
+var solverTimer    = null;
+
+// pointer state
+var pHeld    = false;   // pointer currently pressed (drag mode)
+var pLastIdx = -1;      // last tile index moved in this press (avoid re-sliding same tile)
+
+// ════════════════════════════════════════════════════════════
+//  PERSISTENCE
+// ════════════════════════════════════════════════════════════
+function load() {
+  try {
+    var d = JSON.parse(localStorage.getItem('15pz7') || '{}');
+    N = Math.min(10, Math.max(3, d.N || 4));
+    scheme  = d.scheme  || 'none';
+    control = d.control || 'click';
+    if(d.scoreN === N) {
+      solveTimes   = d.solveTimes   || [];
+      solveMoves   = d.solveMoves   || [];
+      solveOpts    = d.solveOpts    || solveTimes.map(function(){ return null; });
+      solveTps     = d.solveTps     || solveTimes.map(function(){ return null; });
+    }
+    // Load bests per size
+    var bests = d.bests || {};
+    var nb = bests[N] || {};
+    bestSingle   = nb.bestSingle   != null ? nb.bestSingle   : null;
+    bestMovesVal = nb.bestMovesVal != null ? nb.bestMovesVal : null;
+    solves = solveTimes.length;
+  } catch(e) {}
+}
+function save() {
+  try {
+    var d = JSON.parse(localStorage.getItem('15pz7') || '{}');
+    var bests = d.bests || {};
+    bests[N] = {bestSingle:bestSingle, bestMovesVal:bestMovesVal};
+    localStorage.setItem('15pz7', JSON.stringify({
+      N:N, scheme:scheme, control:control,
+      scoreN:N,
+      solveTimes:solveTimes, solveMoves:solveMoves, solveOpts:solveOpts, solveTps:solveTps,
+      bests:bests
+    }));
+  } catch(e) {}
+}
+function clearAll() {
+  if (!confirm('Clear session scores?')) return;
+  solveTimes=[]; solveMoves=[]; solveOpts=[]; solveTps=[]; solves=0;
+  var tpsEl=document.getElementById('tb-tps'); if(tpsEl) tpsEl.textContent='0.00';
+  save(); renderLog(); renderSession();
+}
+
+// ════════════════════════════════════════════════════════════
+//  IDA* SOLVER — time-sliced, yields every 5ms
+// ════════════════════════════════════════════════════════════
+var solverToken = 0;
+var solverTimer = null;
+
+var DR=[-1,1,0,0], DC=[0,0,-1,1], OPP=[1,0,3,2];
+
+function h(t, n, gp) {
+  var s=0, size=n*n, i, v, g, r, c, c2, v1, v2, g1, g2;
+  for(i=0;i<size;i++){ v=t[i]; if(!v) continue; g=gp[v]; s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n); }
+  for(r=0;r<n;r++) for(c=0;c<n-1;c++) {
+    v1=t[r*n+c]; if(!v1) continue; g1=gp[v1]; if(Math.floor(g1/n)!==r) continue;
+    for(c2=c+1;c2<n;c2++) { v2=t[r*n+c2]; if(!v2) continue; g2=gp[v2]; if(Math.floor(g2/n)!==r) continue; if(g1>g2) s+=2; }
+  }
+  return s;
+}
+
+// Iterative DFS using explicit stack — can be paused and resumed
+function makeStack(snap, bound, n, gp) {
+  var ei=snap.indexOf(0);
+  return [{state:snap.slice(), g:0, last:-1, ei:ei, di:0, min:Infinity}];
+}
+
+function runSlice(stack, bound, n, gp, deadline) {
+  while(stack.length && Date.now()<deadline) {
+    var f = stack[stack.length-1];
+    var h0 = h(f.state,n,gp);
+    if(f.g+h0 > bound) { stack.pop(); continue; }
+    if(h0===0) return 'found';
+
+    var moved = false;
+    var er=Math.floor(f.ei/n), ec=f.ei%n;
+    while(f.di<4) {
+      var d=f.di++;
+      if(f.last>=0&&d===OPP[f.last]) continue;
+      var nr=er+DR[d], nc=ec+DC[d];
+      if(nr<0||nr>=n||nc<0||nc>=n) continue;
+      var ni=nr*n+nc;
+      var ns=f.state.slice();
+      ns[f.ei]=ns[ni]; ns[ni]=0;
+      var nf=f.g+1+h(ns,n,gp);
+      if(nf<=bound) {
+        stack.push({state:ns, g:f.g+1, last:d, ei:ni, di:0, min:Infinity});
+        moved=true; break;
+      } else {
+        if(nf<f.min) f.min=nf;
+      }
+    }
+    if(!moved) {
+      var mn=f.min;
+      stack.pop();
+      if(stack.length) { var p=stack[stack.length-1]; if(mn<p.min) p.min=mn; }
+      else return mn; // exhausted this bound
+    }
+  }
+  return 'yield'; // time slice expired
+}
+
+function runSolver(snap, n) {
+  solverToken++;
+  var token=solverToken;
+  currentOptimal=null;
+  setOptDisp('…','');
+  var gp=[], size=n*n;
+  for(var i=0;i<size-1;i++) gp[i+1]=i; gp[0]=size-1;
+  var bound=h(snap,n,gp);
+  if(bound===0){ currentOptimal=0; setOptDisp('0','exact'); return; }
+  setOptDisp('≥'+bound,'approx');
+  var stack=makeStack(snap,bound,n,gp);
+
+  function step() {
+    if(solverToken!==token) return;
+    var r=runSlice(stack,bound,n,gp,Date.now()+5);
+    if(solverToken!==token) return;
+    if(r==='found') {
+      currentOptimal=bound; setOptDisp(String(bound),'exact');
+    } else if(r==='yield') {
+      solverTimer=setTimeout(step,0);
+    } else if(typeof r==='number') {
+      // exhausted bound, move to next
+      bound=r;
+      setOptDisp('≥'+bound,'approx');
+      stack=makeStack(snap,bound,n,gp);
+      solverTimer=setTimeout(step,0);
+    }
+  }
+  solverTimer=setTimeout(step,0);
+}
+function cancelSolver() { solverToken++; clearTimeout(solverTimer); }
+function setOptDisp(text,state) {
+  var col=state==='exact'?'green':state==='approx'?'orange':'';
+  var lo=document.getElementById('l-opt');
+  var tb=document.getElementById('tb-opt');
+  if(lo){ lo.textContent=text; lo.className='stat-val'+(col?' '+col:''); }
+  if(tb){ tb.textContent=text; tb.className='t-val opt'+(state==='exact'?' exact':''); }
+}
+var schedDeb=null;
+function schedSolver() {
+  clearTimeout(schedDeb);
+  schedDeb=setTimeout(function(){ runSolver(tiles.slice(),N); }, 0);
+}
+
+// ════════════════════════════════════════════════════════════
+//  PUZZLE LOGIC
+// ════════════════════════════════════════════════════════════
+function solvedState(n) {
+  var a=[], size=n*n, i;
+  for(i=1;i<size;i++) a.push(i);
+  a.push(0);
+  return a;
+}
+
+function shuffle(n) {
+  // Generate by making random legal moves from solved state —
+  // guaranteed solvable, no parity calculation needed.
+  var a=solvedState(n), size=n*n;
+  var blank=size-1; // blank starts at last position
+  var lastMove=-1;
+  var DR=[-1,1,0,0], DC=[0,0,-1,1];
+  var steps=size*80;
+  for(var s=0;s<steps;s++){
+    var r=Math.floor(blank/n), c=blank%n;
+    var dirs=[];
+    for(var d=0;d<4;d++){
+      if(d===(lastMove^1)) continue; // don't undo last move
+      var nr=r+DR[d], nc=c+DC[d];
+      if(nr>=0&&nr<n&&nc>=0&&nc<n) dirs.push(d);
+    }
+    var d2=dirs[Math.floor(Math.random()*dirs.length)];
+    var nr2=r+DR[d2], nc2=c+DC[d2];
+    var ni=nr2*n+nc2;
+    a[blank]=a[ni]; a[ni]=0;
+    blank=ni; lastMove=d2;
+  }
+  return a;
+}
+
+function solvable(a, n) {
+  // Count inversions (ignoring blank)
+  var inv=0;
+  for(var i=0;i<a.length;i++){
+    if(!a[i]) continue;
+    for(var j=i+1;j<a.length;j++){
+      if(a[j] && a[i]>a[j]) inv++;
+    }
+  }
+  if(n%2===1){
+    // Odd grid: solvable iff inversions even
+    return inv%2===0;
+  } else {
+    // Even grid: solvable iff (inversions + row of blank from bottom) is even
+    // row from bottom: 0 = bottom row
+    var blankRow=Math.floor(a.indexOf(0)/n);
+    var rowFromBottom=(n-1)-blankRow;
+    return (inv+rowFromBottom)%2===0;
+  }
+}
+
+function isSolved(a, n) {
+  var size=n*n, i;
+  for(i=0;i<size-1;i++) if(a[i]!==i+1) return false;
+  return a[size-1]===0;
+}
+
+// ════════════════════════════════════════════════════════════
+//  COLOR SCHEMES
+// ════════════════════════════════════════════════════════════
+function hslColor(hue) {
+  return { bg:'hsl('+hue+',72%,58%)', color:'hsl('+hue+',65%,16%)' };
+}
+
+// Rainbow hues in order, with yellow clearly distinct.
+// #fffb00 = hsl(59,100%,50%) — we use 55 for yellow.
+// Skips the muddy 63-80 range between yellow and green.
+function stepToHue(s, total) {
+  var t = Math.max(total, 1);
+  // Keypoints: 0=red(0), ..., yellow(55), skip, green(120), blue(240), violet(300)
+  var keys = [0, 55, 120, 180, 240, 270, 300];
+  var pos = (s / t) * (keys.length - 1);
+  var i = Math.floor(pos);
+  var f = pos - i;
+  if(i >= keys.length - 1) return keys[keys.length - 1];
+  return Math.round(keys[i] + f * (keys[i+1] - keys[i]));
+}
+
+// Rainbow: each tile number gets its own hue
+function rainbowColor(val, n) {
+  var hue=Math.round((val-1)*300/(n*n-2));
+  return hslColor(hue);
+}
+
+// Layer-by-layer: goal rows 0..N-3 grouped by row, last 2 rows grouped by column.
+// Total steps = (N-2) + N = 2N-2
+function layerColor(idx, val, n) {
+  var gi = val - 1;
+  var gr = Math.floor(gi / n), gc = gi % n;
+  var step = gr < n-2 ? gr : (n-2) + gc;
+  var total = (n-2) + n - 1; // 2N-3
+  return hslColor(stepToHue(step, total));
+}
+
+// Fringe: color by solving step.
+// Step 0: top row (tiles whose goal is row 0)
+// Step 1: rest of left col (goal col 0, row > 0)
+// Step 2: second row minus first cell (goal row 1, col > 0)
+// Step 3: rest of second col (goal col 1, row > 1)
+// ... alternating row then col, working inward.
+function fringeStep(val, n) {
+  var goalIdx = val - 1;
+  var gr = Math.floor(goalIdx / n), gc = goalIdx % n;
+  var step = 0;
+  var top = 0, left = 0;
+  while(true) {
+    // top row of remaining area
+    if(gr === top && gc >= left) return step;
+    step++;
+    // left col of remaining area (below top)
+    if(gc === left && gr > top) return step;
+    step++;
+    top++; left++;
+    if(top >= n || left >= n) return step;
+  }
+}
+function fringeColor(idx, val, n) {
+  var totalSteps = 0;
+  var t=0, l=0;
+  while(t<n && l<n){ totalSteps+=2; t++; l++; }
+  var s = fringeStep(val, n);
+  var hue = stepToHue(s, totalSteps);
+  return hslColor(hue);
+}
+
+function tileStyle(idx, val, n) {
+  if (val===0) return null;
+  if (scheme==='none')   return null;
+  if (scheme==='layer')  return layerColor(idx,val,n);
+  if (scheme==='fringe') return fringeColor(idx,val,n);
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════
+//  MOVEMENT
+// ════════════════════════════════════════════════════════════
+function slideToward(idx) {
+  if (finished) return 0;
+  var e=emptyIdx, er=Math.floor(e/N), ec=e%N;
+  var ir=Math.floor(idx/N), ic=idx%N;
+  var count=0, i;
+  if (ir===er && ic!==ec) {
+    if (!started) onFirst();
+    if (ic<ec) { for(i=ec-1;i>=ic;i--){ tiles[ir*N+i+1]=tiles[ir*N+i]; count++; } tiles[ir*N+ic]=0; }
+    else       { for(i=ec+1;i<=ic;i++){ tiles[ir*N+i-1]=tiles[ir*N+i]; count++; } tiles[ir*N+ic]=0; }
+    emptyIdx = ir*N+ic;
+  } else if (ic===ec && ir!==er) {
+    if (!started) onFirst();
+    if (ir<er) { for(i=er-1;i>=ir;i--){ tiles[(i+1)*N+ic]=tiles[i*N+ic]; count++; } tiles[ir*N+ic]=0; }
+    else       { for(i=er+1;i<=ir;i++){ tiles[(i-1)*N+ic]=tiles[i*N+ic]; count++; } tiles[ir*N+ic]=0; }
+    emptyIdx = ir*N+ic;
+  }
+  return count;
+}
+
+// ════════════════════════════════════════════════════════════
+//  GAME FLOW
+// ════════════════════════════════════════════════════════════
+function newGame() {
+  cancelSolver(); stopTimer();
+  finished=false; started=false; moves=0; timerMs=0;
+  currentOptimal=null; setOptDisp('…','');
+  pHeld=false; pLastIdx=-1; _tbMoves=null; _lMoves=null; _tbTps=null; _gridEl=null;
+  tiles = mode==='free' ? solvedState(N) : shuffle(N);
+  emptyIdx = tiles.indexOf(0);
+  document.getElementById('overlay').classList.remove('show');
+  updateUI(); renderGrid();
+  if(mode==='free') schedSolver();
+}
+
+function goSolved() {
+  cancelSolver();
+  tiles=solvedState(N);
+  emptyIdx=tiles.indexOf(0);
+  currentOptimal=0; setOptDisp('0','exact');
+  renderGrid();
+}
+
+function resetMoves() {
+  moves=0; updateUI();
+}
+
+function doScramble() {
+  cancelSolver(); stopTimer();
+  finished=false; started=false; timerMs=0;
+  if(mode!=='free') moves=0;
+  currentOptimal=null; setOptDisp('…','');
+  tiles=shuffle(N);
+  emptyIdx = tiles.indexOf(0);
+  document.getElementById('overlay').classList.remove('show');
+  updateUI(); renderGrid();
+  if(mode==='free') schedSolver();
+}
+
+// Cache empty tile index — avoid O(N²) indexOf on every move
+var emptyIdx = 0;
+function ei() { return emptyIdx; }
+
+function onFirst() {
+  started=true;
+  if(mode==='timed') {
+    startTimer();
+    setTimeout(schedSolver, 1000); // delay solver so first moves feel instant
+  }
+}
+
+var _tbTps = null;
+function updateTps() {
+  if(mode!=='timed') return;
+  if(!_tbTps) _tbTps = document.getElementById('tb-tps');
+  if(!_tbTps) return;
+  var tps = (timerMs > 0 && moves > 0) ? (moves / (timerMs / 1000)) : 0;
+  _tbTps.textContent = tps.toFixed(2);
+}
+
+// Lightweight move counter display — only 1 DOM write on hot path
+var _tbMoves = null, _lMoves = null;
+function getMovEls() {
+  if(!_tbMoves) _tbMoves = document.getElementById('tb-moves');
+  if(!_lMoves)  _lMoves  = document.getElementById('l-moves');
+}
+
+var uiRaf = null;
+function schedUpdateUI() {
+  // Update move count immediately (cheap, 2 writes)
+  getMovEls();
+  if(_tbMoves) _tbMoves.textContent = moves;
+  if(_lMoves)  _lMoves.textContent  = moves;
+  // Defer solved check + full UI to next frame
+  if(uiRaf) return;
+  uiRaf = requestAnimationFrame(function(){
+    uiRaf = null;
+    if(isSolved(tiles,N)) onSolved();
+  });
+}
+
+function afterMove() {
+  schedUpdateUI();
+  if(mode==='free') schedSolver(); // freestyle: update optimal as board changes
+  // timed: optimal is fixed at scramble start, don't re-run
+}
+
+function updateTileEl(el, idx) {
+  var val=tiles[idx];
+  if(val===0){
+    if(el._val===0) return;
+    el._val=0;
+    el.className='tile empty';
+    el.textContent='';
+    el.style.background='';
+    el.style.color='';
+  } else {
+    if(el._val===val) return;
+    el._val=val;
+    el.className='tile';
+    el.style.outline='';
+    el.textContent=val;
+    var c=tileStyle(idx,val,N);
+    if(c){ el.style.background=c.bg; el.style.color=c.color; }
+    else { el.style.background='#a0a0b0'; el.style.color='#222'; }
+  }
+}
+
+var _gridEl = null;
+function getGrid() { return _gridEl || (_gridEl=document.getElementById('grid')); }
+
+function doMoveIdx(idx) {
+  if (finished) return 0;
+  var els=getGrid().children;
+  var e=emptyIdx, er=Math.floor(e/N), ec=e%N;
+  var ir=Math.floor(idx/N), ic=idx%N;
+  var changed=[];
+  var i;
+  if(ir===er && ic!==ec){
+    var dir=ic<ec?-1:1;
+    for(i=e;i!==idx;i+=dir) changed.push(i);
+    changed.push(idx);
+  } else if(ic===ec && ir!==er){
+    var dir2=ir<er?-N:N;
+    for(i=e;i!==idx;i+=dir2) changed.push(i);
+    changed.push(idx);
+  }
+  var count=slideToward(idx);
+  if(count>0){
+    moves+=count;
+    clearHL();
+    for(var k=0;k<changed.length;k++) updateTileEl(els[changed[k]], changed[k]);
+    afterMove();
+  }
+  return count;
+}
+
+function onSolved() {
+  if (mode==='free') return;
+  finished=true; stopTimer();
+  solves++;
+  var t=timerMs, m=moves, opt=currentOptimal;
+  var tps = t>0 ? (m/(t/1000)) : 0;
+  solveTimes.push(t); solveMoves.push(m); solveOpts.push(opt); solveTps.push(tps);
+  var isPB=bestSingle===null||t<bestSingle;
+  if(isPB) bestSingle=t;
+  if(bestMovesVal===null||m<bestMovesVal) bestMovesVal=m;
+  save();
+  waveAnim(function(){
+    var ot=document.getElementById('ov-title');
+    ot.textContent=isPB?'🏆 Best!':'Solved';
+    ot.className='ov-title'+(isPB?' pb':'');
+    document.getElementById('ov-time').textContent=fmtMs(t);
+    document.getElementById('ov-sub').textContent=m+' move'+(m!==1?'s':'');
+    var optEl=document.getElementById('ov-opt');
+    if(opt!==null){ var diff=m-opt; optEl.textContent='optimal: '+opt+(diff>0?' (+'+diff+')':''); }
+    else optEl.textContent='';
+    document.getElementById('overlay').classList.add('show');
+    setTimeout(function(){ document.getElementById('overlay').classList.remove('show'); newGame(); },2200);
+  });
+  renderLog(); renderSession(); renderBest();
+}
+
+function waveAnim(cb) {
+  var els=document.querySelectorAll('.tile:not(.empty)'), arr=Array.prototype.slice.call(els);
+  arr.forEach(function(el,i){ setTimeout(function(){ el.classList.add('popping'); setTimeout(function(){ el.classList.remove('popping'); }, 300); },i*18); });
+  setTimeout(cb, arr.length*18+350);
+}
+
+// ════════════════════════════════════════════════════════════
+//  TIMER
+// ════════════════════════════════════════════════════════════
+var tpsInterval = null;
+function startTimer() {
+  rafT0=performance.now()-timerMs;
+  function tick(){ timerMs=performance.now()-rafT0; var s=document.getElementById('tb-time'),l=document.getElementById('l-time'); if(s)s.textContent=fmtMs(timerMs); if(l)l.textContent=fmtMs(timerMs); rafId=requestAnimationFrame(tick); }
+  rafId=requestAnimationFrame(tick);
+  if(tpsInterval) clearInterval(tpsInterval);
+  tpsInterval=setInterval(updateTps, 10);
+}
+function stopTimer() { if(rafId){cancelAnimationFrame(rafId);rafId=null;} if(tpsInterval){clearInterval(tpsInterval);tpsInterval=null;} }
+function fmtMs(ms) {
+  var s=Math.floor(ms/1000), m=Math.floor(s/60), ss=s%60;
+  var ms3=Math.floor(ms%1000);
+  return m+':'+(ss<10?'0':'')+ss+'.'+(ms3<100?(ms3<10?'00':'0'):'')+ms3;
+}
+
+// ════════════════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════════════════
+var TILE_SIZES={3:100,4:86,5:72,6:60,7:52,8:46,9:40,10:36};
+var FONT_SIZES={3:28,4:24,5:20,6:17,7:15,8:13,9:11,10:10};
+
+function renderGrid() {
+  _gridEl = null;
+  var grid=document.getElementById('grid');
+  var ts=TILE_SIZES[N]||86, fs=FONT_SIZES[N]||24;
+  grid.style.gridTemplateColumns='repeat('+N+', '+ts+'px)';
+  grid.style.gridTemplateRows   ='repeat('+N+', '+ts+'px)';
+
+  var existing=grid.children;
+  var size=N*N;
+
+  if(existing.length!==size){
+    grid.innerHTML='';
+    for(var i=0;i<size;i++){
+      var div=document.createElement('div');
+      div.className='tile';
+      div.style.width=ts+'px';
+      div.style.height=ts+'px';
+      div.style.fontSize=fs+'px';
+      div._val=null; // init cache
+      grid.appendChild(div);
+    }
+  }
+
+  for(var idx=0;idx<size;idx++){
+    var el=existing[idx];
+    el._val=null; // force full update
+    el.dataset.idx=String(idx);
+    el.style.width=ts+'px';
+    el.style.height=ts+'px';
+    el.style.fontSize=fs+'px';
+    updateTileEl(el, idx);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  HIGHLIGHT
+// ════════════════════════════════════════════════════════════
+function hlMovable(idx) {
+  clearHL();
+  var e=ei(), er=Math.floor(e/N), ec=e%N;
+  var ir=Math.floor(idx/N), ic=idx%N;
+  var all=document.querySelectorAll('.tile:not(.empty)');
+  for(var k=0;k<all.length;k++){
+    var el=all[k], i=+el.dataset.idx, tr=Math.floor(i/N), tc=i%N;
+    if(tr===er&&ir===er){ if((ec<ic&&tc>=ec&&tc<=ic)||(ec>ic&&tc<=ec&&tc>=ic)) el.classList.add('hl'); }
+    else if(tc===ec&&ic===ec){ if((er<ir&&tr>=er&&tr<=ir)||(er>ir&&tr<=er&&tr>=ir)) el.classList.add('hl'); }
+  }
+}
+function clearHL() { var h=document.querySelectorAll('.hl'); for(var i=0;i<h.length;i++) h[i].classList.remove('hl'); }
+
+// ════════════════════════════════════════════════════════════
+//  INPUT HANDLING
+// ════════════════════════════════════════════════════════════
+function initEvents() {
+  var grid=document.getElementById('grid');
+  var lastTileIdx = -1;
+
+  function handleTile(el) {
+    if(!el||finished) return;
+    if(!el.classList.contains('tile')) el=el.closest ? el.closest('.tile') : null;
+    if(!el||el.classList.contains('empty')) return;
+    var idx=+el.dataset.idx;
+    if(idx===lastTileIdx) return;
+    lastTileIdx=idx;
+    var e0=ei(), er=Math.floor(e0/N), ec=e0%N;
+    var ir=Math.floor(idx/N), ic=idx%N;
+    if(ir!==er&&ic!==ec) { lastTileIdx=-1; return; }
+    doMoveIdx(idx);
+    lastTileIdx=-1;
+  }
+
+  // HOVER: mouseover fires once per tile entry
+  grid.addEventListener('mouseover', function(e) {
+    if(control!=='hover') return;
+    handleTile(e.target);
+  });
+
+  grid.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  // HOVER on mouse: mouseover fires once per tile (efficient)
+  grid.addEventListener('mouseover', function(e) {
+    if(control!=='hover'||finished) return;
+    handleTile(e.target);
+  });
+  // pointerdown fires once per interaction regardless of touch/mouse/pen
+  grid.addEventListener('pointerdown', function(e) {
+    e.preventDefault();
+    pHeld=true; lastTileIdx=-1;
+
+    var idx=-1;
+    if(e.pointerType==='touch') {
+      // Use geometry for touch (elementFromPoint unreliable under finger)
+      var rect=grid.getBoundingClientRect();
+      var ts=TILE_SIZES[N]||86;
+      var col=Math.floor((e.clientX-rect.left)/ts);
+      var row=Math.floor((e.clientY-rect.top)/ts);
+      if(col>=0&&col<N&&row>=0&&row<N) idx=row*N+col;
+    } else {
+      var el=e.target;
+      if(!el.classList.contains('tile')) el=el.closest?el.closest('.tile'):null;
+      if(el&&!el.classList.contains('empty')) idx=+el.dataset.idx;
+    }
+
+    if(idx<0||tiles[idx]===0) return;
+    var e0=ei(), er=Math.floor(e0/N), ec=e0%N;
+    var ir=Math.floor(idx/N), ic=idx%N;
+    if(ir!==er&&ic!==ec) return;
+    if(control==='click'||control==='drag'||control==='hover') doMoveIdx(idx);
+  });
+
+  // pointermove for drag and hover
+  grid.addEventListener('pointermove', function(e) {
+    if(finished) return;
+    if(control==='hover'||(control==='drag'&&pHeld)) {
+      var rect=grid.getBoundingClientRect();
+      var ts=TILE_SIZES[N]||86;
+      var col=Math.floor((e.clientX-rect.left)/ts);
+      var row=Math.floor((e.clientY-rect.top)/ts);
+      if(col<0||col>=N||row<0||row>=N) return;
+      var el=grid.children[row*N+col];
+      if(el) handleTile(el);
+    }
+  });
+
+  document.addEventListener('pointerup',     function(){ pHeld=false; lastTileIdx=-1; });
+  document.addEventListener('pointercancel', function(){ pHeld=false; lastTileIdx=-1; });
+
+  grid.addEventListener('touchend',    function(){ pHeld=false; lastTileIdx=-1; gridRect=null; });
+  grid.addEventListener('touchcancel', function(){ pHeld=false; lastTileIdx=-1; gridRect=null; });
+}
+
+// ════════════════════════════════════════════════════════════
+//  CUSTOM SCRAMBLE (freestyle)
+// ════════════════════════════════════════════════════════════
+var customParsed = null;
+
+function onCustomInput() {
+  var inp=document.getElementById('cs-input');
+  var badge=document.getElementById('cs-badge');
+  var apply=document.getElementById('cs-apply');
+  var raw=inp.value.trim();
+  customParsed=null;
+  inp.className='scramble-input';
+  badge.className='solvability-badge empty'; badge.textContent='—';
+  apply.style.display='none';
+  if(!raw){ return; }
+
+  var parts=raw.split(/[\s,]+/).filter(function(x){return x!=='';});
+  var size=N*N;
+  if(parts.length!==size){ badge.textContent='Need '+size+' numbers'; badge.className='solvability-badge unsolvable'; inp.className='scramble-input invalid'; return; }
+
+  var nums=parts.map(function(p){ return parseInt(p,10); });
+  if(nums.some(isNaN)){ badge.textContent='Invalid numbers'; badge.className='solvability-badge unsolvable'; inp.className='scramble-input invalid'; return; }
+
+  var sorted=nums.slice().sort(function(a,b){return a-b;});
+  var expected=[]; for(var i=0;i<size;i++) expected.push(i);
+  var ok=sorted.every(function(v,i){return v===expected[i];});
+  if(!ok){ badge.textContent='Use 0–'+(size-1)+', each once'; badge.className='solvability-badge unsolvable'; inp.className='scramble-input invalid'; return; }
+
+  inp.className='scramble-input valid';
+  customParsed=nums;
+  if(isSolved(nums,N)){ badge.textContent='Already solved'; badge.className='solvability-badge solvable'; apply.style.display='block'; return; }
+  if(solvable(nums,N)){ badge.textContent='✓ Solvable'; badge.className='solvability-badge solvable'; apply.style.display='block'; }
+  else { badge.textContent='✗ Not solvable'; badge.className='solvability-badge unsolvable'; apply.style.display='none'; }
+}
+
+function applyCustom() {
+  if(!customParsed) return;
+  cancelSolver(); stopTimer();
+  finished=false; started=false; moves=0; timerMs=0;
+  currentOptimal=null; setOptDisp('…','');
+  tiles=customParsed.slice();
+  emptyIdx = tiles.indexOf(0);
+  document.getElementById('overlay').classList.remove('show');
+  updateUI(); renderGrid(); schedSolver();
+}
+
+// ════════════════════════════════════════════════════════════
+//  UI UPDATES
+// ════════════════════════════════════════════════════════════
+function updateUI() {
+  document.getElementById('tb-moves').textContent =moves;
+  document.getElementById('l-moves').textContent  =moves;
+  document.getElementById('l-solves').textContent =solves;
+  if(!started||mode==='free'){ 
+    document.getElementById('tb-time').textContent='0:00.000'; 
+    document.getElementById('l-time').textContent='—';
+    var tpsEl=document.getElementById('tb-tps'); if(tpsEl) tpsEl.textContent='0.00';
+  }
+}
+
+function avg(a){ if(!a.length)return null; return a.reduce(function(x,y){return x+y;},0)/a.length; }
+function aoN(n2){
+  if(solveTimes.length<n2)return null;
+  var s=solveTimes.slice(-n2), mn=Math.min.apply(null,s), mx=Math.max.apply(null,s);
+  return avg(s.filter(function(x){return x!==mn&&x!==mx;}));
+}
+
+function renderLog() {
+  var wrap=document.getElementById('log-wrap');
+  if(!solveTimes.length){wrap.innerHTML='<div class="log-empty">No solves yet</div>';return;}
+  var bestT=Math.min.apply(null,solveTimes), html='';
+  for(var ri=0;ri<solveTimes.length;ri++){
+    var i=solveTimes.length-1-ri, t=solveTimes[i], m=solveMoves[i], opt=solveOpts[i];
+    var tps=solveTps[i]!=null?solveTps[i].toFixed(1):'—';
+    var isPB=t===bestT&&solveTimes.lastIndexOf(bestT)===i;
+    html+='<div class="log-row"><span class="log-n">'+(i+1)+'</span><span class="log-t">'+fmtMs(t)+'</span><span class="log-m">'+m+'</span><span class="log-m">'+tps+'</span></div>';
+  }
+  wrap.innerHTML=html;
+}
+function renderSession(){
+  var best=solveTimes.length?Math.min.apply(null,solveTimes):null;
+  document.getElementById('s-best').textContent =best?fmtMs(best):'—';
+  document.getElementById('s-ao5').textContent  =aoN(5)?fmtMs(aoN(5)):'—';
+  document.getElementById('s-ao12').textContent =aoN(12)?fmtMs(aoN(12)):'—';
+  document.getElementById('s-mean').textContent =avg(solveTimes)?fmtMs(avg(solveTimes)):'—';
+}
+function renderBest(){
+  document.getElementById('b-single').textContent=bestSingle?fmtMs(bestSingle):'—';
+  document.getElementById('b-moves').textContent =bestMovesVal!=null?bestMovesVal+' mv':'—';
+}
+
+// ════════════════════════════════════════════════════════════
+//  MODE / CONTROL / SCHEME / SIZE
+// ════════════════════════════════════════════════════════════
+function setMode(m) {
+  mode=m;
+  document.getElementById('tab-timed').classList.toggle('active',m==='timed');
+  document.getElementById('tab-free').classList.toggle('active', m==='free');
+  document.getElementById('box-session').style.display  =m==='free'?'none':'';
+  document.getElementById('btn-scramble').style.display   =m==='free'?'':'none';
+  document.getElementById('btn-solved').style.display     =m==='free'?'':'none';
+  document.getElementById('btn-resetmoves').style.display =m==='free'?'':'none';
+  document.getElementById('fs-note').style.display      =m==='free'?'':'none';
+  document.getElementById('tb-time-box').style.display = m==='free' ? 'none' : '';
+  document.getElementById('tb-tps-box').style.display  = m==='free' ? 'none' : '';
+  document.getElementById('tb-lbl').textContent = 'Time';
+  newGame(); renderLog(); renderSession(); renderBest();
+}
+
+function setControl(c) {
+  control=c;
+  document.getElementById('tog-click').classList.toggle('active', c==='click');
+  document.getElementById('tog-drag').classList.toggle('active',  c==='drag');
+  document.getElementById('tog-hover').classList.toggle('active', c==='hover');
+  var grid=document.getElementById('grid');
+  grid.classList.toggle('hover-mode', c==='hover');
+  pHeld=false; pLastIdx=-1; clearHL();
+  save();
+}
+
+function setScheme(s) {
+  scheme=s;
+  document.getElementById('tog-rainbow').classList.toggle('active',s==='none');
+  document.getElementById('tog-layer').classList.toggle('active',  s==='layer');
+  document.getElementById('tog-fringe').classList.toggle('active', s==='fringe');
+  renderGrid(); save();
+}
+
+function onSizeChange(v) {
+  N=parseInt(v,10);
+  solveTimes=[]; solveMoves=[]; solveOpts=[]; solveTps=[]; solves=0;
+  // Load bests for this size from storage
+  try {
+    var d=JSON.parse(localStorage.getItem('15pz7')||'{}');
+    var nb=(d.bests||{})[N]||{};
+    bestSingle   = nb.bestSingle   != null ? nb.bestSingle   : null;
+    bestMovesVal = nb.bestMovesVal != null ? nb.bestMovesVal : null;
+  } catch(e) { bestSingle=null; bestMovesVal=null; }
+  document.getElementById('size-val').textContent=N+' × '+N;
+  document.getElementById('cs-hint').textContent='Enter numbers 0–'+(N*N-1)+' separated by spaces. 0 = blank.';
+  document.getElementById('cs-input').value='';
+  document.getElementById('cs-badge').className='solvability-badge empty'; document.getElementById('cs-badge').textContent='—';
+  document.getElementById('cs-apply').style.display='none';
+  cancelSolver(); stopTimer();
+  finished=false; started=false; moves=0; timerMs=0;
+  currentOptimal=null; setOptDisp('…','');
+  tiles=mode==='free'?solvedState(N):shuffle(N);
+  emptyIdx=tiles.indexOf(0);
+  document.getElementById('overlay').classList.remove('show');
+  updateUI(); renderGrid(); renderLog(); renderSession(); renderBest(); schedSolver(); save();
+}
+
+// ════════════════════════════════════════════════════════════
+//  KEYBOARD
+// ════════════════════════════════════════════════════════════
+document.addEventListener('keydown', function(e) {
+  if(finished) return;
+  var e0=ei(), er=Math.floor(e0/N), ec=e0%N, t=-1;
+  if(e.key==='ArrowUp'   &&er<N-1) t=e0+N;
+  if(e.key==='ArrowDown' &&er>0)   t=e0-N;
+  if(e.key==='ArrowLeft' &&ec<N-1) t=e0+1;
+  if(e.key==='ArrowRight'&&ec>0)   t=e0-1;
+  if(t>=0){ e.preventDefault(); doMoveIdx(t); }
+});
+
+// ════════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════════
+load();
+document.getElementById('size-slider').value=N;
+document.getElementById('size-val').textContent=N+' × '+N;
+['tog-rainbow','tog-layer','tog-fringe'].forEach(function(id){
+  var s2=id.replace('tog-',''); if(s2==='rainbow') s2='none';
+  document.getElementById(id).classList.toggle('active', scheme===s2);
+});
+['tog-click','tog-drag','tog-hover'].forEach(function(id){
+  document.getElementById(id).classList.toggle('active', control===id.replace('tog-',''));
+});
+
+initEvents();
+setMode(mode);
+renderLog();
+renderSession();
+renderBest();
+</script>
+</body>
+</html>
