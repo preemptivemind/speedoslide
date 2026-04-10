@@ -262,6 +262,7 @@ input[type=range] {
         <button class="btn" id="btn-solved" style="display:none" onclick="goSolved()">Solved Position</button>
         <button class="btn" id="btn-resetmoves" style="display:none" onclick="resetMoves()">Reset Movecount</button>
         <button class="btn danger" onclick="clearAll()">Clear Scores</button>
+        <button class="btn danger" onclick="clearPB()">Clear PB</button>
       </div>
     </div>
 
@@ -426,6 +427,12 @@ function save() {
     }));
   } catch(e) {}
 }
+function clearPB() {
+  if(!confirm('Clear all-time best for '+N+'×'+N+'? This cannot be undone.')) return;
+  bestSingle=null; bestMovesVal=null;
+  save(); renderBest();
+}
+
 function clearAll() {
   if (!confirm('Clear session scores?')) return;
   solveTimes=[]; solveMoves=[]; solveOpts=[]; solveTps=[]; solves=0;
