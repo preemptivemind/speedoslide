@@ -245,6 +245,12 @@ input[type=range] {
         <div class="stat-row"><span class="stat-name">Ao5</span>  <span class="stat-val"       id="s-ao5">—</span></div>
         <div class="stat-row"><span class="stat-name">Ao12</span> <span class="stat-val"       id="s-ao12">—</span></div>
         <div class="stat-row"><span class="stat-name">Mean</span> <span class="stat-val"       id="s-mean">—</span></div>
+        <div class="stat-row"><span class="stat-name">Move Ao5</span>  <span class="stat-val"   id="s-mv-ao5">—</span></div>
+        <div class="stat-row"><span class="stat-name">Move Ao12</span> <span class="stat-val"   id="s-mv-ao12">—</span></div>
+        <div class="stat-row"><span class="stat-name">Move Mean</span> <span class="stat-val"   id="s-mv-mean">—</span></div>
+        <div class="stat-row"><span class="stat-name">TPS Ao5</span>  <span class="stat-val"  id="s-tps-ao5">—</span></div>
+        <div class="stat-row"><span class="stat-name">TPS Ao12</span> <span class="stat-val"  id="s-tps-ao12">—</span></div>
+        <div class="stat-row"><span class="stat-name">TPS Mean</span> <span class="stat-val"  id="s-tps-mean">—</span></div>
       </div>
     </div>
 
@@ -605,7 +611,7 @@ function hslColor(hue) {
 function stepToHue(s, total) {
   var t = Math.max(total, 1);
   // Keypoints: 0=red(0), ..., yellow(55), skip, green(120), blue(240), violet(300)
-  var keys = [0, 55, 120, 180, 240, 270, 300];
+  var keys = [0, 55, 60, 180, 240, 270, 300];
   var pos = (s / t) * (keys.length - 1);
   var i = Math.floor(pos);
   var f = pos - i;
@@ -1093,12 +1099,27 @@ function renderLog() {
   }
   wrap.innerHTML=html;
 }
+function aoNArr(arr, n2) {
+  if(arr.length<n2) return null;
+  var s=arr.slice(-n2);
+  var mn=Math.min.apply(null,s), mx=Math.max.apply(null,s);
+  var trimmed=s.filter(function(x){return x!==mn&&x!==mx;});
+  return avg(trimmed);
+}
 function renderSession(){
   var best=solveTimes.length?Math.min.apply(null,solveTimes):null;
-  document.getElementById('s-best').textContent =best?fmtMs(best):'—';
-  document.getElementById('s-ao5').textContent  =aoN(5)?fmtMs(aoN(5)):'—';
-  document.getElementById('s-ao12').textContent =aoN(12)?fmtMs(aoN(12)):'—';
-  document.getElementById('s-mean').textContent =avg(solveTimes)?fmtMs(avg(solveTimes)):'—';
+  document.getElementById('s-best').textContent  =best?fmtMs(best):'—';
+  document.getElementById('s-ao5').textContent   =aoN(5)?fmtMs(aoN(5)):'—';
+  document.getElementById('s-ao12').textContent  =aoN(12)?fmtMs(aoN(12)):'—';
+  document.getElementById('s-mean').textContent  =avg(solveTimes)?fmtMs(avg(solveTimes)):'—';
+  var mAo5=aoNArr(solveMoves,5), mAo12=aoNArr(solveMoves,12), mMean=avg(solveMoves);
+  document.getElementById('s-mv-ao5').textContent  =mAo5!=null?mAo5.toFixed(1):'—';
+  document.getElementById('s-mv-ao12').textContent =mAo12!=null?mAo12.toFixed(1):'—';
+  document.getElementById('s-mv-mean').textContent =mMean!=null?mMean.toFixed(1):'—';
+  var tAo5=aoNArr(solveTps,5), tAo12=aoNArr(solveTps,12), tMean=avg(solveTps);
+  document.getElementById('s-tps-ao5').textContent  =tAo5!=null?tAo5.toFixed(2):'—';
+  document.getElementById('s-tps-ao12').textContent =tAo12!=null?tAo12.toFixed(2):'—';
+  document.getElementById('s-tps-mean').textContent =tMean!=null?tMean.toFixed(2):'—';
 }
 function renderBest(){
   document.getElementById('b-single').textContent=bestSingle?fmtMs(bestSingle):'—';
