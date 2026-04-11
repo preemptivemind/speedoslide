@@ -220,6 +220,7 @@ input[type=range] {
   <div class="topbar-tabs">
     <button class="topbar-tab active" id="tab-timed" onclick="setMode('timed')">Timed</button>
     <button class="topbar-tab"        id="tab-free"  onclick="setMode('free')">Freestyle</button>
+    <button class="topbar-tab"        id="tab-explore" onclick="setMode('explore')">Explorer</button>
   </div>
 </div>
 
@@ -261,6 +262,8 @@ input[type=range] {
         <button class="btn" id="btn-scramble" style="display:none" onclick="doScramble()">Random Scramble</button>
         <button class="btn" id="btn-solved" style="display:none" onclick="goSolved()">Solved Position</button>
         <button class="btn" id="btn-resetmoves" style="display:none" onclick="resetMoves()">Reset Movecount</button>
+        <button class="btn" id="btn-toggletimer" style="display:none" onclick="toggleExploreTimer()">Stop Timer</button>
+        <button class="btn" id="btn-resettimer" style="display:none" onclick="resetExploreTimer()">Reset Timer</button>
         <button class="btn danger" onclick="clearAll()">Clear Scores</button>
         <button class="btn danger" onclick="clearPB()">Clear PB</button>
       </div>
@@ -712,11 +715,31 @@ function newGame() {
   finished=false; started=false; moves=0; timerMs=0;
   currentOptimal=null; setOptDisp('…','');
   pHeld=false; pLastIdx=-1; _tbMoves=null; _lMoves=null; _tbTps=null; _gridEl=null;
-  tiles = mode==='free' ? solvedState(N) : shuffle(N);
+  tiles = (mode==='free'||mode==='explore') ? solvedState(N) : shuffle(N);
   emptyIdx = tiles.indexOf(0);
+  exploreTimerPaused=false;
+  var tb=document.getElementById('btn-toggletimer'); if(tb) tb.textContent='Stop Timer';
   document.getElementById('overlay').classList.remove('show');
   updateUI(); renderGrid();
   if(mode==='free') schedSolver();
+}
+
+var exploreTimerPaused = false;
+
+function toggleExploreTimer() {
+  if(mode!=='explore') return;
+  stopTimer();
+  exploreTimerPaused=true;
+  started=false;
+  document.getElementById('btn-toggletimer').textContent='Stop Timer';
+}
+
+function resetExploreTimer() {
+  if(mode!=='explore') return;
+  stopTimer();
+  timerMs=0; started=false; exploreTimerPaused=false;
+  document.getElementById('tb-time').textContent='0:00.000';
+  document.getElementById('l-time').textContent='—';
 }
 
 function goSolved() {
@@ -751,7 +774,11 @@ function onFirst() {
   started=true;
   if(mode==='timed') {
     startTimer();
-    setTimeout(schedSolver, 1000); // delay solver so first moves feel instant
+    setTimeout(schedSolver, 1000);
+  }
+  if(mode==='explore') {
+    exploreTimerPaused=false;
+    startTimer();
   }
 }
 
@@ -787,8 +814,7 @@ function schedUpdateUI() {
 
 function afterMove() {
   schedUpdateUI();
-  if(mode==='free') schedSolver(); // freestyle: update optimal as board changes
-  // timed: optimal is fixed at scramble start, don't re-run
+  if(mode==='free'||mode==='explore') schedSolver();
 }
 
 function updateTileEl(el, idx) {
@@ -842,7 +868,7 @@ function doMoveIdx(idx) {
 }
 
 function onSolved() {
-  if (mode==='free') return;
+  if (mode==='free'||mode==='explore') return;
   finished=true; stopTimer();
   solves++;
   var t=timerMs, m=moves, opt=currentOptimal;
@@ -1139,15 +1165,22 @@ function renderBest(){
 // ════════════════════════════════════════════════════════════
 function setMode(m) {
   mode=m;
-  document.getElementById('tab-timed').classList.toggle('active',m==='timed');
-  document.getElementById('tab-free').classList.toggle('active', m==='free');
-  document.getElementById('box-session').style.display  =m==='free'?'none':'';
-  document.getElementById('btn-scramble').style.display   =m==='free'?'':'none';
-  document.getElementById('btn-solved').style.display     =m==='free'?'':'none';
-  document.getElementById('btn-resetmoves').style.display =m==='free'?'':'none';
-  document.getElementById('fs-note').style.display      =m==='free'?'':'none';
-  document.getElementById('tb-time-box').style.display = m==='free' ? 'none' : '';
-  document.getElementById('tb-tps-box').style.display  = m==='free' ? 'none' : '';
+  var isFree    = m==='free';
+  var isExplore = m==='explore';
+  var isTimed   = m==='timed';
+  document.getElementById('tab-timed').classList.toggle('active',   isTimed);
+  document.getElementById('tab-free').classList.toggle('active',    isFree);
+  document.getElementById('tab-explore').classList.toggle('active', isExplore);
+  document.getElementById('box-session').style.display    = isFree||isExplore ? 'none' : '';
+  document.getElementById('btn-scramble').style.display   = isFree||isExplore ? '' : 'none';
+  document.getElementById('btn-solved').style.display     = isFree||isExplore ? '' : 'none';
+  document.getElementById('btn-resetmoves').style.display = isFree||isExplore ? '' : 'none';
+  document.getElementById('btn-toggletimer').style.display= isExplore ? '' : 'none';
+  document.getElementById('btn-resettimer').style.display = isExplore ? '' : 'none';
+  document.getElementById('fs-note').style.display        = isFree ? '' : 'none';
+  document.getElementById('scramble-section').style.display = isTimed ? 'none' : '';
+  document.getElementById('tb-time-box').style.display    = isFree ? 'none' : '';
+  document.getElementById('tb-tps-box').style.display     = isFree ? 'none' : '';
   document.getElementById('tb-lbl').textContent = 'Time';
   newGame(); renderLog(); renderSession(); renderBest();
 }
