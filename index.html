@@ -400,12 +400,13 @@ function load() {
     N = Math.min(10, Math.max(3, d.N || 4));
     scheme  = d.scheme  || 'none';
     control = d.control || 'click';
-    if(d.scoreN === N) {
-      solveTimes   = d.solveTimes   || [];
-      solveMoves   = d.solveMoves   || [];
-      solveOpts    = d.solveOpts    || solveTimes.map(function(){ return null; });
-      solveTps     = d.solveTps     || solveTimes.map(function(){ return null; });
-    }
+    // Load session per size
+    var sessions = d.sessions || {};
+    var ns = sessions[N] || {};
+    solveTimes   = ns.solveTimes   || [];
+    solveMoves   = ns.solveMoves   || [];
+    solveOpts    = ns.solveOpts    || [];
+    solveTps     = ns.solveTps     || [];
     // Load bests per size
     var bests = d.bests || {};
     var nb = bests[N] || {};
@@ -419,11 +420,11 @@ function save() {
     var d = JSON.parse(localStorage.getItem('15pz7') || '{}');
     var bests = d.bests || {};
     bests[N] = {bestSingle:bestSingle, bestMovesVal:bestMovesVal};
+    var sessions = d.sessions || {};
+    sessions[N] = {solveTimes:solveTimes, solveMoves:solveMoves, solveOpts:solveOpts, solveTps:solveTps};
     localStorage.setItem('15pz7', JSON.stringify({
       N:N, scheme:scheme, control:control,
-      scoreN:N,
-      solveTimes:solveTimes, solveMoves:solveMoves, solveOpts:solveOpts, solveTps:solveTps,
-      bests:bests
+      bests:bests, sessions:sessions
     }));
   } catch(e) {}
 }
@@ -434,7 +435,7 @@ function clearPB() {
 }
 
 function clearAll() {
-  if (!confirm('Clear session scores?')) return;
+  if (!confirm('Clear session scores for '+N+'×'+N+'?')) return;
   solveTimes=[]; solveMoves=[]; solveOpts=[]; solveTps=[]; solves=0;
   var tpsEl=document.getElementById('tb-tps'); if(tpsEl) tpsEl.textContent='0.00';
   save(); renderLog(); renderSession();
@@ -1171,15 +1172,21 @@ function setScheme(s) {
 }
 
 function onSizeChange(v) {
+  save(); // save current size session first
   N=parseInt(v,10);
-  solveTimes=[]; solveMoves=[]; solveOpts=[]; solveTps=[]; solves=0;
-  // Load bests for this size from storage
+  // Load session and bests for new size
   try {
     var d=JSON.parse(localStorage.getItem('15pz7')||'{}');
+    var ns=(d.sessions||{})[N]||{};
+    solveTimes   = ns.solveTimes || [];
+    solveMoves   = ns.solveMoves || [];
+    solveOpts    = ns.solveOpts  || [];
+    solveTps     = ns.solveTps   || [];
+    solves = solveTimes.length;
     var nb=(d.bests||{})[N]||{};
     bestSingle   = nb.bestSingle   != null ? nb.bestSingle   : null;
     bestMovesVal = nb.bestMovesVal != null ? nb.bestMovesVal : null;
-  } catch(e) { bestSingle=null; bestMovesVal=null; }
+  } catch(e) { solveTimes=[]; solveMoves=[]; solveOpts=[]; solveTps=[]; solves=0; bestSingle=null; bestMovesVal=null; }
   document.getElementById('size-val').textContent=N+' × '+N;
   document.getElementById('cs-hint').textContent='Enter numbers 0–'+(N*N-1)+' separated by spaces. 0 = blank.';
   document.getElementById('cs-input').value='';
