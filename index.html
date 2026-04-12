@@ -865,7 +865,7 @@ function resetMoves() {
 function doScramble() {
   cancelSolver(); stopTimer();
   finished=false; started=false; timerMs=0;
-  if(mode!=='free') moves=0;
+  if(mode==='timed') moves=0;
   currentOptimal=null; setOptDisp('…','');
   tiles=shuffle(N);
   emptyIdx = tiles.indexOf(0);
@@ -1338,7 +1338,7 @@ function onSizeChange(v) {
   cancelSolver(); stopTimer();
   finished=false; started=false; moves=0; timerMs=0;
   currentOptimal=null; setOptDisp('…','');
-  tiles=mode==='free'?solvedState(N):shuffle(N);
+  tiles=(mode==='free'||mode==='explore')?solvedState(N):shuffle(N);
   emptyIdx=tiles.indexOf(0);
   document.getElementById('overlay').classList.remove('show');
   updateUI(); renderGrid(); renderLog(); renderSession(); renderBest(); schedSolver(); save();
