@@ -285,11 +285,12 @@ input[type=range] {
     <div class="box" id="stopatbox" style="display:none">
       <div class="box-title">Stop At Position</div>
       <div class="box-body">
-        <div class="scramble-hint">Enter target position. Use X for wildcard (any tile). Timer stops when board matches.</div>
+        <div class="scramble-hint">Enter target position. Use X for wildcard. Timer stops when board matches.</div>
         <div class="scramble-input-wrap" style="margin-top:5px">
           <input type="text" class="scramble-input" id="sa-input" placeholder="1 2 3 … 0" oninput="onStopAtInput()">
         </div>
         <div id="sa-badge" class="solvability-badge empty">—</div>
+        <button class="btn primary" onclick="setSolvedStopAt()" style="margin-top:5px">Solved State</button>
         <button class="btn" id="sa-clear" onclick="clearStopAt()" style="margin-top:5px;display:none">Clear</button>
       </div>
     </div>
@@ -775,6 +776,17 @@ function resetExploreTimer() {
 // ════════════════════════════════════════════════════════════
 var stopAtPattern = null; // array of N*N, null=any(X), number=exact
 
+function setDefaultStopAt() {
+  var solved = solvedState(N);
+  stopAtPattern = solved;
+  var inp = document.getElementById('sa-input');
+  if(inp) inp.value = solved.join(' ');
+  var badge = document.getElementById('sa-badge');
+  if(badge){ badge.className='solvability-badge solvable'; badge.textContent='✓ Solved state'; }
+  var btn = document.getElementById('sa-clear');
+  if(btn) btn.style.display='block';
+}
+
 function onStopAtInput() {
   var inp=document.getElementById('sa-input');
   var badge=document.getElementById('sa-badge');
@@ -809,6 +821,16 @@ function onStopAtInput() {
   stopAtPattern=pat;
   badge.className='solvability-badge solvable'; badge.textContent='✓ Set';
   btn.style.display='block';
+}
+
+function setSolvedStopAt() {
+  var solved = solvedState(N);
+  stopAtPattern = solved;
+  var inp = document.getElementById('sa-input');
+  if(inp) inp.value = solved.join(' ');
+  var badge = document.getElementById('sa-badge');
+  if(badge){ badge.className='solvability-badge solvable'; badge.textContent='✓ Solved state'; }
+  document.getElementById('sa-clear').style.display='block';
 }
 
 function clearStopAt() {
