@@ -282,6 +282,18 @@ input[type=range] {
       </div>
     </div>
 
+    <div class="box" id="stopatbox" style="display:none">
+      <div class="box-title">Stop At Position</div>
+      <div class="box-body">
+        <div class="scramble-hint">Enter target position. Use X for wildcard (any tile). Timer stops when board matches.</div>
+        <div class="scramble-input-wrap" style="margin-top:5px">
+          <input type="text" class="scramble-input" id="sa-input" placeholder="1 2 3 … 0" oninput="onStopAtInput()">
+        </div>
+        <div id="sa-badge" class="solvability-badge empty">—</div>
+        <button class="btn" id="sa-clear" onclick="clearStopAt()" style="margin-top:5px;display:none">Clear</button>
+      </div>
+    </div>
+
     <div class="box">
       <div class="box-title">All-Time Best</div>
       <div class="box-body">
@@ -620,14 +632,30 @@ function hslColor(hue) {
 // #fffb00 = hsl(59,100%,50%) — we use 55 for yellow.
 // Skips the muddy 63-80 range between yellow and green.
 function stepToHue(s, total) {
+  var sets = {
+    1: [0],
+    2: [0, 220],
+    3: [0, 120, 240],
+    4: [0, 55, 180, 290],
+    5: [0, 28, 120, 210, 290],
+    6: [0, 28, 55, 165, 195, 310],
+    7: [0, 28, 55, 120, 180, 240, 300],
+    8: [0, 28, 55, 120, 165, 210, 260, 310],
+    9: [0, 20, 40, 120, 165, 195, 225, 265, 310],
+    10:[0, 20, 40, 55, 120, 165, 200, 235, 270, 310],
+    11:[0, 20, 40, 55, 120, 155, 185, 215, 245, 275, 310],
+    12:[0, 18, 36, 55, 120, 150, 175, 200, 225, 250, 278, 310],
+    13:[0, 16, 32, 48, 120, 148, 170, 192, 214, 236, 258, 282, 310],
+    14:[0, 15, 30, 45, 60, 120, 150, 175, 200, 225, 248, 270, 292, 310],
+    15:[0, 14, 28, 42, 55, 120, 148, 170, 192, 212, 232, 252, 272, 292, 310],
+    16:[0, 13, 26, 39, 52, 65, 120, 148, 168, 188, 208, 228, 248, 268, 288, 310],
+    17:[0, 12, 24, 36, 48, 60, 120, 144, 163, 182, 201, 220, 239, 258, 277, 296, 310],
+    18:[0, 12, 24, 36, 48, 60, 120, 140, 158, 176, 194, 212, 230, 248, 266, 284, 298, 315]
+  };
   var t = Math.max(total, 1);
-  // Keypoints: 0=red(0), ..., yellow(55), skip, green(120), blue(240), violet(300)
-  var keys = [0, 55, 60, 180, 240, 270, 300];
-  var pos = (s / t) * (keys.length - 1);
-  var i = Math.floor(pos);
-  var f = pos - i;
-  if(i >= keys.length - 1) return keys[keys.length - 1];
-  return Math.round(keys[i] + f * (keys[i+1] - keys[i]));
+  var n = t + 1;
+  var set = sets[Math.min(n, 18)] || sets[18];
+  return set[Math.min(s, set.length - 1)];
 }
 
 // Rainbow: each tile number gets its own hue
@@ -742,6 +770,64 @@ function resetExploreTimer() {
   document.getElementById('l-time').textContent='—';
 }
 
+// ════════════════════════════════════════════════════════════
+//  STOP AT POSITION (explorer mode)
+// ════════════════════════════════════════════════════════════
+var stopAtPattern = null; // array of N*N, null=any(X), number=exact
+
+function onStopAtInput() {
+  var inp=document.getElementById('sa-input');
+  var badge=document.getElementById('sa-badge');
+  var btn=document.getElementById('sa-clear');
+  var raw=inp.value.trim();
+  stopAtPattern=null;
+  badge.className='solvability-badge empty'; badge.textContent='—';
+  btn.style.display='none';
+  if(!raw) return;
+
+  // Special: just "X" means solved state
+  if(raw.toUpperCase()==='X') {
+    stopAtPattern=solvedState(N);
+    badge.className='solvability-badge solvable'; badge.textContent='✓ Solved state';
+    btn.style.display='block'; return;
+  }
+
+  var parts=raw.split(/[\s,]+/).filter(function(x){return x!=='';});
+  var size=N*N;
+  if(parts.length!==size){ badge.className='solvability-badge unsolvable'; badge.textContent='Need '+size+' values'; return; }
+
+  var pat=[];
+  var seen={};
+  for(var i=0;i<parts.length;i++){
+    var p=parts[i];
+    if(p.toUpperCase()==='X'){ pat.push(null); continue; }
+    var n=parseInt(p,10);
+    if(isNaN(n)||n<0||n>=size){ badge.className='solvability-badge unsolvable'; badge.textContent='Invalid: '+p; return; }
+    if(seen[n]!==undefined){ badge.className='solvability-badge unsolvable'; badge.textContent='Duplicate: '+n; return; }
+    seen[n]=i; pat.push(n);
+  }
+  stopAtPattern=pat;
+  badge.className='solvability-badge solvable'; badge.textContent='✓ Set';
+  btn.style.display='block';
+}
+
+function clearStopAt() {
+  stopAtPattern=null;
+  document.getElementById('sa-input').value='';
+  document.getElementById('sa-badge').className='solvability-badge empty'; document.getElementById('sa-badge').textContent='—';
+  document.getElementById('sa-clear').style.display='none';
+}
+
+function checkStopAt() {
+  if(mode!=='explore'||!stopAtPattern) return;
+  for(var i=0;i<tiles.length;i++){
+    if(stopAtPattern[i]!==null && stopAtPattern[i]!==tiles[i]) return;
+  }
+  // Match — stop timer
+  stopTimer();
+  started=false;
+}
+
 function goSolved() {
   cancelSolver();
   tiles=solvedState(N);
@@ -815,6 +901,7 @@ function schedUpdateUI() {
 function afterMove() {
   schedUpdateUI();
   if(mode==='free'||mode==='explore') schedSolver();
+  if(mode==='explore') checkStopAt();
 }
 
 function updateTileEl(el, idx) {
@@ -1179,6 +1266,7 @@ function setMode(m) {
   document.getElementById('btn-resettimer').style.display = isExplore ? '' : 'none';
   document.getElementById('fs-note').style.display        = isFree ? '' : 'none';
   document.getElementById('scramble-section').style.display = isTimed ? 'none' : '';
+  document.getElementById('stopatbox').style.display        = isExplore ? '' : 'none';
   document.getElementById('tb-time-box').style.display    = isFree ? 'none' : '';
   document.getElementById('tb-tps-box').style.display     = isFree ? 'none' : '';
   document.getElementById('tb-lbl').textContent = 'Time';
