@@ -181,7 +181,14 @@ input[type=range] {
 .log-m  { color: #555; text-align: right; font-variant-numeric: tabular-nums; }
 .log-o  { color: #e65100; text-align: right; font-size: 9px; font-variant-numeric: tabular-nums; }
 .log-pb { color: #2e7d32; font-size: 9px; font-weight: 700; text-align: right; }
-.log-empty { font-size: 11px; color: #bbb; text-align: center; padding: 10px 0; }
+.best-bar { background:#fff; border-top:1px solid #e0e0e0; padding:14px 32px; margin-top:8px; }
+.best-bar-title { font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#bbb; margin-bottom:10px; }
+.best-bar-cols { display:flex; gap:48px; }
+.best-col { flex:1; min-width:120px; }
+.best-col-hdr { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#1565c0; margin-bottom:6px; border-bottom:1px solid #e0e0e0; padding-bottom:3px; }
+.best-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; }
+.best-name { color:#888; }
+.best-val { color:#2e7d32; font-weight:500; font-variant-numeric:tabular-nums; }
 
 /* ── Custom scramble section ── */
 .scramble-input-wrap { display: flex; gap: 4px; margin-top: 5px; }
@@ -295,17 +302,6 @@ input[type=range] {
       </div>
     </div>
 
-    <div class="box">
-      <div class="box-title">All-Time Best</div>
-      <div class="box-body">
-        <div class="stat-row"><span class="stat-name">Single</span><span class="stat-val green" id="b-single">—</span></div>
-        <div class="stat-row"><span class="stat-name">Moves</span> <span class="stat-val green" id="b-moves">—</span></div>
-        <div class="stat-row"><span class="stat-name">Ao5</span>   <span class="stat-val green" id="b-ao5">—</span></div>
-        <div class="stat-row"><span class="stat-name">Ao12</span>  <span class="stat-val green" id="b-ao12">—</span></div>
-        <div class="stat-row"><span class="stat-name">Mean</span>  <span class="stat-val green" id="b-mean">—</span></div>
-      </div>
-    </div>
-
   </div>
 
   <!-- CENTER -->
@@ -385,6 +381,33 @@ input[type=range] {
       </div>
     </div>
 
+  </div>
+</div>
+
+<div class="best-bar">
+  <div class="best-bar-title">All-Time Best</div>
+  <div class="best-bar-cols">
+    <div class="best-col">
+      <div class="best-col-hdr">Time</div>
+      <div class="best-row"><span class="best-name">Single</span><span class="best-val" id="b-single">—</span></div>
+      <div class="best-row"><span class="best-name">Ao5</span>   <span class="best-val" id="b-ao5">—</span></div>
+      <div class="best-row"><span class="best-name">Ao12</span>  <span class="best-val" id="b-ao12">—</span></div>
+      <div class="best-row"><span class="best-name">Mean</span>  <span class="best-val" id="b-mean">—</span></div>
+    </div>
+    <div class="best-col">
+      <div class="best-col-hdr">Moves</div>
+      <div class="best-row"><span class="best-name">Best</span>  <span class="best-val" id="b-moves">—</span></div>
+      <div class="best-row"><span class="best-name">Ao5</span>   <span class="best-val" id="b-mv-ao5">—</span></div>
+      <div class="best-row"><span class="best-name">Ao12</span>  <span class="best-val" id="b-mv-ao12">—</span></div>
+      <div class="best-row"><span class="best-name">Mean</span>  <span class="best-val" id="b-mv-mean">—</span></div>
+    </div>
+    <div class="best-col">
+      <div class="best-col-hdr">TPS</div>
+      <div class="best-row"><span class="best-name">Best</span>  <span class="best-val" id="b-tps">—</span></div>
+      <div class="best-row"><span class="best-name">Ao5</span>   <span class="best-val" id="b-tps-ao5">—</span></div>
+      <div class="best-row"><span class="best-name">Ao12</span>  <span class="best-val" id="b-tps-ao12">—</span></div>
+      <div class="best-row"><span class="best-name">Mean</span>  <span class="best-val" id="b-tps-mean">—</span></div>
+    </div>
   </div>
 </div>
 
@@ -1281,25 +1304,30 @@ function renderSession(){
 }
 function renderBest(){
   document.getElementById('b-single').textContent = bestSingle!=null ? fmtMs(bestSingle) : '—';
-  document.getElementById('b-moves').textContent  = bestMovesVal!=null ? bestMovesVal+' mv' : '—';
-  // Best Ao5/Ao12/Mean — best rolling average from session history
-  var ba5=null, ba12=null, bmean=null;
-  if(solveTimes.length>=5) {
-    for(var i=4;i<solveTimes.length;i++) {
-      var a5=aoNArr(solveTimes.slice(0,i+1),5);
-      if(a5!=null&&(ba5===null||a5<ba5)) ba5=a5;
-    }
-  }
-  if(solveTimes.length>=12) {
-    for(var j=11;j<solveTimes.length;j++) {
-      var a12=aoNArr(solveTimes.slice(0,j+1),12);
-      if(a12!=null&&(ba12===null||a12<ba12)) ba12=a12;
-    }
-  }
-  bmean = avg(solveTimes);
-  document.getElementById('b-ao5').textContent  = ba5!=null  ? fmtMs(ba5)  : '—';
-  document.getElementById('b-ao12').textContent = ba12!=null ? fmtMs(ba12) : '—';
-  document.getElementById('b-mean').textContent = bmean!=null? fmtMs(bmean): '—';
+  // Best time averages
+  var ba5=null, ba12=null, bmean=avg(solveTimes);
+  for(var i=4;i<solveTimes.length;i++){var a=aoNArr(solveTimes.slice(0,i+1),5); if(a!=null&&(ba5===null||a<ba5))ba5=a;}
+  for(var j=11;j<solveTimes.length;j++){var b=aoNArr(solveTimes.slice(0,j+1),12); if(b!=null&&(ba12===null||b<ba12))ba12=b;}
+  document.getElementById('b-ao5').textContent  = ba5!=null   ? fmtMs(ba5)   : '—';
+  document.getElementById('b-ao12').textContent = ba12!=null  ? fmtMs(ba12)  : '—';
+  document.getElementById('b-mean').textContent = bmean!=null ? fmtMs(bmean) : '—';
+  // Best moves
+  document.getElementById('b-moves').textContent = bestMovesVal!=null ? bestMovesVal : '—';
+  var bma5=null, bma12=null, bmmean=avg(solveMoves);
+  for(var k=4;k<solveMoves.length;k++){var c=aoNArr(solveMoves.slice(0,k+1),5); if(c!=null&&(bma5===null||c<bma5))bma5=c;}
+  for(var l=11;l<solveMoves.length;l++){var d=aoNArr(solveMoves.slice(0,l+1),12); if(d!=null&&(bma12===null||d<bma12))bma12=d;}
+  document.getElementById('b-mv-ao5').textContent  = bma5!=null   ? bma5.toFixed(1)   : '—';
+  document.getElementById('b-mv-ao12').textContent = bma12!=null  ? bma12.toFixed(1)  : '—';
+  document.getElementById('b-mv-mean').textContent = bmmean!=null ? bmmean.toFixed(1) : '—';
+  // Best TPS
+  var bestTps = solveTps.length ? Math.max.apply(null, solveTps.filter(function(x){return x!=null;})) : null;
+  var bta5=null, bta12=null, btmean=avg(solveTps);
+  for(var m=4;m<solveTps.length;m++){var e=aoNArr(solveTps.slice(0,m+1),5); if(e!=null&&(bta5===null||e>bta5))bta5=e;}
+  for(var n2=11;n2<solveTps.length;n2++){var f=aoNArr(solveTps.slice(0,n2+1),12); if(f!=null&&(bta12===null||f>bta12))bta12=f;}
+  document.getElementById('b-tps').textContent     = bestTps!=null ? bestTps.toFixed(2) : '—';
+  document.getElementById('b-tps-ao5').textContent = bta5!=null    ? bta5.toFixed(2)    : '—';
+  document.getElementById('b-tps-ao12').textContent= bta12!=null   ? bta12.toFixed(2)   : '—';
+  document.getElementById('b-tps-mean').textContent= btmean!=null  ? btmean.toFixed(2)  : '—';
 }
 
 function deleteSolve() {
