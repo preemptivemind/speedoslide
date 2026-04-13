@@ -300,6 +300,21 @@ input[type=range] {
       <div class="box-body">
         <div class="stat-row"><span class="stat-name">Single</span><span class="stat-val green" id="b-single">—</span></div>
         <div class="stat-row"><span class="stat-name">Moves</span> <span class="stat-val green" id="b-moves">—</span></div>
+        <div class="stat-row"><span class="stat-name">Ao5</span>   <span class="stat-val green" id="b-ao5">—</span></div>
+        <div class="stat-row"><span class="stat-name">Ao12</span>  <span class="stat-val green" id="b-ao12">—</span></div>
+        <div class="stat-row"><span class="stat-name">Mean</span>  <span class="stat-val green" id="b-mean">—</span></div>
+      </div>
+    </div>
+
+    <div class="box" id="box-deletelog">
+      <div class="box-title">Delete Solve</div>
+      <div class="box-body">
+        <div class="scramble-hint">Enter solve number to delete (1 = oldest).</div>
+        <div style="display:flex;gap:4px;margin-top:5px">
+          <input type="number" min="1" class="scramble-input" id="del-input" placeholder="#">
+          <button class="btn danger" onclick="deleteSolve()">Delete</button>
+        </div>
+        <div id="del-badge" class="solvability-badge empty" style="margin-top:4px"></div>
       </div>
     </div>
 
@@ -1265,8 +1280,48 @@ function renderSession(){
   document.getElementById('s-tps-mean').textContent =tMean!=null?tMean.toFixed(2):'—';
 }
 function renderBest(){
-  document.getElementById('b-single').textContent=bestSingle?fmtMs(bestSingle):'—';
-  document.getElementById('b-moves').textContent =bestMovesVal!=null?bestMovesVal+' mv':'—';
+  document.getElementById('b-single').textContent = bestSingle!=null ? fmtMs(bestSingle) : '—';
+  document.getElementById('b-moves').textContent  = bestMovesVal!=null ? bestMovesVal+' mv' : '—';
+  // Best Ao5/Ao12/Mean — best rolling average from session history
+  var ba5=null, ba12=null, bmean=null;
+  if(solveTimes.length>=5) {
+    for(var i=4;i<solveTimes.length;i++) {
+      var a5=aoNArr(solveTimes.slice(0,i+1),5);
+      if(a5!=null&&(ba5===null||a5<ba5)) ba5=a5;
+    }
+  }
+  if(solveTimes.length>=12) {
+    for(var j=11;j<solveTimes.length;j++) {
+      var a12=aoNArr(solveTimes.slice(0,j+1),12);
+      if(a12!=null&&(ba12===null||a12<ba12)) ba12=a12;
+    }
+  }
+  bmean = avg(solveTimes);
+  document.getElementById('b-ao5').textContent  = ba5!=null  ? fmtMs(ba5)  : '—';
+  document.getElementById('b-ao12').textContent = ba12!=null ? fmtMs(ba12) : '—';
+  document.getElementById('b-mean').textContent = bmean!=null? fmtMs(bmean): '—';
+}
+
+function deleteSolve() {
+  var inp=document.getElementById('del-input');
+  var badge=document.getElementById('del-badge');
+  var n=parseInt(inp.value,10);
+  if(isNaN(n)||n<1||n>solveTimes.length) {
+    badge.className='solvability-badge unsolvable';
+    badge.textContent='Invalid: enter 1–'+solveTimes.length;
+    return;
+  }
+  var idx=n-1;
+  solveTimes.splice(idx,1); solveMoves.splice(idx,1);
+  solveOpts.splice(idx,1);  solveTps.splice(idx,1);
+  solves=solveTimes.length;
+  // Recalculate bests
+  bestSingle   = solveTimes.length ? Math.min.apply(null,solveTimes) : null;
+  bestMovesVal = solveMoves.length ? Math.min.apply(null,solveMoves) : null;
+  inp.value='';
+  badge.className='solvability-badge solvable';
+  badge.textContent='Deleted solve #'+n;
+  save(); renderLog(); renderSession(); renderBest();
 }
 
 // ════════════════════════════════════════════════════════════
