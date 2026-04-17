@@ -171,8 +171,8 @@ input[type=range] {
 .log-wrap::-webkit-scrollbar { width: 4px; }
 .log-wrap::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
 .log-hdr, .log-row {
-  display: grid; grid-template-columns: 18px 1fr 32px 42px;
-  gap: 6px; font-size: 10px; padding: 3px 0; border-bottom: 1px solid #f5f5f5; align-items: center;
+  display: grid; grid-template-columns: 28px 1fr 44px 54px 52px 52px;
+  gap: 8px; font-size: 11px; padding: 3px 0; border-bottom: 1px solid #f5f5f5; align-items: center;
 }
 .log-hdr { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #bbb; border-bottom-color: #eee; }
 .log-row:last-child { border-bottom: none; }
@@ -271,8 +271,16 @@ input[type=range] {
         <button class="btn" id="btn-resetmoves" style="display:none" onclick="resetMoves()">Reset Movecount</button>
         <button class="btn" id="btn-toggletimer" style="display:none" onclick="toggleExploreTimer()">Stop Timer</button>
         <button class="btn" id="btn-resettimer" style="display:none" onclick="resetExploreTimer()">Reset Timer</button>
-        <button class="btn danger" onclick="clearAll()">Clear Scores</button>
-        <button class="btn danger" onclick="clearPB()">Clear PB</button>
+        <button class="btn danger" onclick="confirmAction('scores')">Clear Scores</button>
+        <button class="btn danger" onclick="confirmAction('pb')">Clear PB</button>
+        <button class="btn" onclick="confirmAction('removepb')" id="btn-removepb" style="display:none">Use 2nd Best as PB</button>
+        <div id="confirm-box" style="display:none;margin-top:6px;background:#fff5f5;border:1px solid #ef9a9a;border-radius:3px;padding:6px 8px;font-size:11px">
+          <div id="confirm-msg" style="color:#c62828;margin-bottom:5px"></div>
+          <div style="display:flex;gap:4px">
+            <button class="btn danger" id="confirm-yes" onclick="doConfirm()" style="flex:1;padding:4px">Yes</button>
+            <button class="btn" onclick="cancelConfirm()" style="flex:1;padding:4px">No</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -307,11 +315,38 @@ input[type=range] {
   <!-- CENTER -->
   <div class="col-center">
 
-    <div class="timer-bar" style="width:100%">
-      <div class="timer-box" id="tb-time-box"><div class="t-label" id="tb-lbl">Time</div><div class="t-val running" id="tb-time">0:00.000</div></div>
-      <div class="timer-box"><div class="t-label">Moves</div><div class="t-val" id="tb-moves">0</div></div>
-      <div class="timer-box" id="tb-tps-box"><div class="t-label">TPS</div><div class="t-val" id="tb-tps">0.0</div></div>
-      <div class="timer-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt">…</div></div>
+
+    <!-- Single-row timer bar (non-4x4) -->
+    <div id="timer-bar-single" style="width:100%">
+      <div class="timer-bar">
+        <div class="timer-box" id="tb-time-box"><div class="t-label" id="tb-lbl">Time</div><div class="t-val running" id="tb-time">0:00.000</div></div>
+        <div class="timer-box"><div class="t-label">Moves</div><div class="t-val" id="tb-moves">0</div></div>
+        <div class="timer-box" id="tb-tps-box"><div class="t-label">TPS</div><div class="t-val" id="tb-tps">0.0</div></div>
+        <div class="timer-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt">…</div></div>
+      </div>
+    </div>
+
+    <!-- Two-row timer bar (4x4 timed only) -->
+    <div id="timer-bar-4x4" style="display:none;width:100%">
+      <div class="timer-bar" style="margin-bottom:4px">
+        <div class="timer-box"><div class="t-label">Time</div><div class="t-val running" id="tb-time-4">0:00.000</div></div>
+        <div class="timer-box"><div class="t-label">Moves</div><div class="t-val" id="tb-moves-4">0</div></div>
+        <div class="timer-box"><div class="t-label">TPS</div><div class="t-val" id="tb-tps-4">0.0</div></div>
+      </div>
+      <div class="timer-bar" style="margin-bottom:4px">
+        <div class="timer-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt-4">…</div></div>
+        <div class="timer-box"><div class="t-label">T%</div><div class="t-val" id="tb-tpct" style="font-size:18px;color:#1565c0">—</div></div>
+        <div class="timer-box"><div class="t-label">M%</div><div class="t-val" id="tb-mpct" style="font-size:18px;color:#2e7d32">—</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:6px 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#bbb">Solved</span>
+          <span style="font-size:13px;font-weight:700;color:#1565c0" id="tb-fpct">0.0%</span>
+        </div>
+        <div style="background:#e0e0e0;border-radius:3px;height:10px;overflow:hidden">
+          <div id="tb-fbar" style="height:100%;width:0%;background:linear-gradient(90deg,#1565c0,#42a5f5);border-radius:3px"></div>
+        </div>
+      </div>
     </div>
 
     <div class="grid-wrap">
@@ -326,6 +361,15 @@ input[type=range] {
     </div>
 
     <div class="fs-note" id="fs-note" style="display:none">Freestyle — board starts solved. No timer.</div>
+    <div id="fs-progress" style="display:none;width:100%;background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:6px 10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#bbb">Solved</span>
+        <span style="font-size:13px;font-weight:700;color:#1565c0" id="fs-fpct">0.0%</span>
+      </div>
+      <div style="background:#e0e0e0;border-radius:3px;height:10px;overflow:hidden">
+        <div id="fs-fbar" style="height:100%;width:0%;background:linear-gradient(90deg,#1565c0,#42a5f5);border-radius:3px;transition:width 0.1s"></div>
+      </div>
+    </div>
 
   </div>
 
@@ -361,6 +405,21 @@ input[type=range] {
       </div>
     </div>
 
+    <div class="box">
+      <div class="box-title">Percentile Explorer</div>
+      <div class="box-body">
+        <div class="scramble-hint">4×4 only. Enter time (s) and/or moves to see percentile.</div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+          <input type="number" min="0" step="0.001" class="scramble-input" id="pe-time" placeholder="Time (s)" oninput="onPEInput()">
+          <input type="number" min="1" class="scramble-input" id="pe-moves" placeholder="Moves" oninput="onPEInput()">
+        </div>
+        <div style="margin-top:6px;font-size:11px;line-height:1.8">
+          <div><span style="color:#888">Time %ile: </span><span id="pe-time-out" style="color:#1565c0;font-weight:500">—</span></div>
+          <div><span style="color:#888">Moves %ile: </span><span id="pe-moves-out" style="color:#2e7d32;font-weight:500">—</span></div>
+        </div>
+      </div>
+    </div>
+
     <div class="box" id="box-deletelog">
       <div class="box-title">Delete Solve</div>
       <div class="box-body">
@@ -373,14 +432,6 @@ input[type=range] {
       </div>
     </div>
 
-    <div class="box">
-      <div class="box-title">Solve Log</div>
-      <div class="box-body" style="padding:8px 10px">
-        <div class="log-hdr"><span>#</span><span>Time</span><span style="text-align:right">Mv</span><span style="text-align:right">TPS</span></div>
-        <div class="log-wrap" id="log-wrap"><div class="log-empty">No solves yet</div></div>
-      </div>
-    </div>
-
   </div>
 </div>
 
@@ -390,6 +441,7 @@ input[type=range] {
     <div class="best-col">
       <div class="best-col-hdr">Time</div>
       <div class="best-row"><span class="best-name">Single</span><span class="best-val" id="b-single">—</span></div>
+      <div class="best-row"><span class="best-name">%ile</span><span class="best-val" id="b-single-pct" style="color:#1565c0">—</span></div>
       <div class="best-row"><span class="best-name">Ao5</span>   <span class="best-val" id="b-ao5">—</span></div>
       <div class="best-row"><span class="best-name">Ao12</span>  <span class="best-val" id="b-ao12">—</span></div>
       <div class="best-row"><span class="best-name">Mean</span>  <span class="best-val" id="b-mean">—</span></div>
@@ -397,6 +449,7 @@ input[type=range] {
     <div class="best-col">
       <div class="best-col-hdr">Moves</div>
       <div class="best-row"><span class="best-name">Best</span>  <span class="best-val" id="b-moves">—</span></div>
+      <div class="best-row"><span class="best-name">%ile</span><span class="best-val" id="b-moves-pct" style="color:#2e7d32">—</span></div>
       <div class="best-row"><span class="best-name">Ao5</span>   <span class="best-val" id="b-mv-ao5">—</span></div>
       <div class="best-row"><span class="best-name">Ao12</span>  <span class="best-val" id="b-mv-ao12">—</span></div>
       <div class="best-row"><span class="best-name">Mean</span>  <span class="best-val" id="b-mv-mean">—</span></div>
@@ -408,6 +461,11 @@ input[type=range] {
       <div class="best-row"><span class="best-name">Ao12</span>  <span class="best-val" id="b-tps-ao12">—</span></div>
       <div class="best-row"><span class="best-name">Mean</span>  <span class="best-val" id="b-tps-mean">—</span></div>
     </div>
+  </div>
+  <div style="margin-top:14px;border-top:1px solid #e0e0e0;padding-top:12px">
+    <div class="best-bar-title">Solve Log</div>
+    <div class="log-hdr" style="max-width:600px"><span>#</span><span>Time</span><span style="text-align:right">Mv</span><span style="text-align:right">TPS</span><span style="text-align:right">T%</span><span style="text-align:right">M%</span></div>
+    <div class="log-wrap" id="log-wrap" style="max-width:600px;max-height:200px;overflow-y:auto"><div class="log-empty">No solves yet</div></div>
   </div>
 </div>
 
@@ -482,17 +540,55 @@ function save() {
     }));
   } catch(e) {}
 }
+var _confirmAction = null;
+function confirmAction(type) {
+  _confirmAction = type;
+  var msg = type==='pb' ? 'Clear all-time best for '+N+'×'+N+'?' :
+            type==='removepb' ? 'Delete best solve and use 2nd best as PB?' :
+            'Clear session scores for '+N+'×'+N+'?';
+  document.getElementById('confirm-msg').textContent = msg;
+  document.getElementById('confirm-box').style.display = '';
+}
+function doConfirm() {
+  document.getElementById('confirm-box').style.display = 'none';
+  if(_confirmAction==='pb') clearPB();
+  else if(_confirmAction==='removepb') removePB();
+  else if(_confirmAction==='scores') clearAll();
+  _confirmAction = null;
+}
+function cancelConfirm() {
+  document.getElementById('confirm-box').style.display = 'none';
+  _confirmAction = null;
+}
+
 function clearPB() {
-  if(!confirm('Clear all-time best for '+N+'×'+N+'? This cannot be undone.')) return;
   bestSingle=null; bestMovesVal=null;
-  save(); renderBest();
+  save(); renderBest(); updateRemovePBBtn();
+}
+
+function removePB() {
+  // Find the best solve index, delete it, recalc PB from remaining
+  if(solveTimes.length<2) return;
+  var minT=Math.min.apply(null,solveTimes);
+  var idx=solveTimes.indexOf(minT);
+  solveTimes.splice(idx,1); solveMoves.splice(idx,1);
+  solveOpts.splice(idx,1);  solveTps.splice(idx,1);
+  solves=solveTimes.length;
+  bestSingle = solveTimes.length ? Math.min.apply(null,solveTimes) : null;
+  var mf=solveMoves.filter(function(x){return x!=null;});
+  bestMovesVal = mf.length ? Math.min.apply(null,mf) : null;
+  save(); renderLog(); renderSession(); renderBest(); updateRemovePBBtn();
+}
+
+function updateRemovePBBtn() {
+  var btn=document.getElementById('btn-removepb');
+  if(btn) btn.style.display = (solveTimes.length>=2) ? '' : 'none';
 }
 
 function clearAll() {
-  if (!confirm('Clear session scores for '+N+'×'+N+'?')) return;
   solveTimes=[]; solveMoves=[]; solveOpts=[]; solveTps=[]; solves=0;
   var tpsEl=document.getElementById('tb-tps'); if(tpsEl) tpsEl.textContent='0.00';
-  save(); renderLog(); renderSession();
+  save(); renderLog(); renderSession(); updateRemovePBBtn();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -585,17 +681,31 @@ function runSolver(snap, n) {
   solverTimer=setTimeout(step,0);
 }
 function cancelSolver() { solverToken++; clearTimeout(solverTimer); }
+function set4x(id, val, cls) {
+  var a=document.getElementById(id), b=document.getElementById(id+'-4');
+  if(a){ a.textContent=val; if(cls!==undefined) a.className=cls; }
+  if(b){ b.textContent=val; if(cls!==undefined) b.className=cls; }
+}
+function updateTimerBars() {
+  var is4 = (N===4&&(mode==='timed'||mode==='explore'));
+  var s=document.getElementById('timer-bar-single'), f=document.getElementById('timer-bar-4x4');
+  if(s) s.style.display = is4 ? 'none' : '';
+  if(f) f.style.display = is4 ? '' : 'none';
+}
 function setOptDisp(text,state) {
   var col=state==='exact'?'green':state==='approx'?'orange':'';
   var lo=document.getElementById('l-opt');
-  var tb=document.getElementById('tb-opt');
   if(lo){ lo.textContent=text; lo.className='stat-val'+(col?' '+col:''); }
-  if(tb){ tb.textContent=text; tb.className='t-val opt'+(state==='exact'?' exact':''); }
+  var cls='t-val opt'+(state==='exact'?' exact':'');
+  set4x('tb-opt', text, cls);
 }
 var schedDeb=null;
+var scrambleSnap = []; // snapshot of tiles at scramble time — solver always runs on this
+
 function schedSolver() {
   clearTimeout(schedDeb);
-  schedDeb=setTimeout(function(){ runSolver(tiles.slice(),N); }, 0);
+  var snap = (mode==='timed') ? scrambleSnap.slice() : tiles.slice();
+  schedDeb=setTimeout(function(){ runSolver(snap, N); }, 0);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -784,11 +894,18 @@ function newGame() {
   pHeld=false; pLastIdx=-1; _tbMoves=null; _lMoves=null; _tbTps=null; _gridEl=null;
   tiles = (mode==='free'||mode==='explore') ? solvedState(N) : shuffle(N);
   emptyIdx = tiles.indexOf(0);
+  if(mode==='timed') scrambleSnap = tiles.slice();
   exploreTimerPaused=false;
   var tb=document.getElementById('btn-toggletimer'); if(tb) tb.textContent='Stop Timer';
   document.getElementById('overlay').classList.remove('show');
+  var tpctEl=document.getElementById('tb-tpct'); if(tpctEl) tpctEl.textContent='—';
+  var mpctEl=document.getElementById('tb-mpct'); if(mpctEl) mpctEl.textContent='—';
+  var fpct2=document.getElementById('tb-fpct'); if(fpct2) fpct2.textContent='0.0%';
+  var fbar2=document.getElementById('tb-fbar'); if(fbar2) fbar2.style.width='0%';
+  var fspct2=document.getElementById('fs-fpct'); if(fspct2) fspct2.textContent='0.0%';
+  var fsbar2=document.getElementById('fs-fbar'); if(fsbar2) fsbar2.style.width='0%';
   updateUI(); renderGrid();
-  if(mode==='free') schedSolver();
+  schedSolver();
 }
 
 var exploreTimerPaused = false;
@@ -805,7 +922,7 @@ function resetExploreTimer() {
   if(mode!=='explore') return;
   stopTimer();
   timerMs=0; started=false; exploreTimerPaused=false;
-  document.getElementById('tb-time').textContent='0:00.000';
+  set4x('tb-time','0:00.000');
   document.getElementById('l-time').textContent='—';
 }
 
@@ -930,14 +1047,14 @@ function onFirst() {
 
 var _tbTps = null;
 function updateTps() {
-  if(mode!=='timed') return;
-  if(!_tbTps) _tbTps = document.getElementById('tb-tps');
-  if(!_tbTps) return;
+  if(mode!=='timed'&&mode!=='explore') return;
   var tps = (timerMs > 0 && moves > 0) ? (moves / (timerMs / 1000)) : 0;
-  _tbTps.textContent = tps.toFixed(2);
+  var v = tps.toFixed(2);
+  if(!_tbTps) _tbTps = document.getElementById('tb-tps');
+  if(_tbTps) _tbTps.textContent = v;
+  var t4=document.getElementById('tb-tps-4'); if(t4) t4.textContent=v;
 }
 
-// Lightweight move counter display — only 1 DOM write on hot path
 var _tbMoves = null, _lMoves = null;
 function getMovEls() {
   if(!_tbMoves) _tbMoves = document.getElementById('tb-moves');
@@ -946,11 +1063,17 @@ function getMovEls() {
 
 var uiRaf = null;
 function schedUpdateUI() {
-  // Update move count immediately (cheap, 2 writes)
   getMovEls();
   if(_tbMoves) _tbMoves.textContent = moves;
+  var m4=document.getElementById('tb-moves-4'); if(m4) m4.textContent=moves;
   if(_lMoves)  _lMoves.textContent  = moves;
-  // Defer solved check + full UI to next frame
+  // Update live fM% for 4x4 timed/explore
+  if(N===4&&(mode==='timed'||mode==='explore')&&started) {
+    var mpctEl=document.getElementById('tb-mpct');
+    if(mpctEl) mpctEl.textContent=fmtPct(movesPctLive(moves))||'—';
+  }
+  if(mode==='free') {}
+  updateProgressBar();
   if(uiRaf) return;
   uiRaf = requestAnimationFrame(function(){
     uiRaf = null;
@@ -1014,30 +1137,68 @@ function doMoveIdx(idx) {
   return count;
 }
 
+// ════════════════════════════════════════════════════════════
+//  PERCENTILE — log-normal CDF fitted to 15puzzle.online leaderboard (N=604)
+//  and moves leaderboard >=50 moves (N=583)
+//  percentile = (1 - CDF(ln(x), mu, sigma)) * 100  (lower=better)
+// ════════════════════════════════════════════════════════════
+function normCDF(z){var t=1/(1+0.2316419*Math.abs(z));var d=0.3989423*Math.exp(-z*z/2);var p=d*t*(0.3193815+t*(-0.3565638+t*(1.7814779+t*(-1.8212560+t*1.3302744))));return z>=0?1-p:p;}
+
+// f = fraction of puzzle solved = (maxMD - currentMD) / maxMD
+// maxMD approximated as GODS[N] for each size
+var GODS={3:31,4:80,5:180,6:270,7:429,8:640,9:911,10:1250};
+var _goalPosCache = {};
+function getMD() {
+  var n=N, size=n*n;
+  if(!_goalPosCache[n]){ var gp=[]; for(var i=0;i<size-1;i++) gp[i+1]=i; gp[0]=size-1; _goalPosCache[n]=gp; }
+  var gp=_goalPosCache[n], s=0;
+  for(var i=0;i<size;i++){ var v=tiles[i]; if(!v) continue; var g=gp[v]; s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n); }
+  return s;
+}
+function getF() { var md=getMD(); var maxMD=GODS[N]||80; var f=Math.max(0,Math.min(1,1-md/maxMD)); return f*f; }
+// Percentile only for 4x4
+// TIME: mu=2.8542, sigma=0.6600 (median=17.4s, calibrated: 5.5s=96%, 7s=91%, 8s=88%)
+var TIME_MU=2.8542, TIME_S=0.6600;
+// MOVES: piecewise log-normal, calibrated: 50=100%,70=98%,80=95%,95=80%,120=60%
+// Seg1 (<=80): mu=4.9165, sigma=0.3251  Seg2 (>80): mu=4.8881, sigma=0.3971
+function movesPct(m,n) {
+  if((n||N)!==4) return null;
+  if(m<50) return null;
+  if(m<=80) return (1-normCDF((Math.log(m)-4.9165)/0.3251))*100;
+  return (1-normCDF((Math.log(m)-4.8881)/0.3971))*100;
+}
+var TPS_MU=1.8374, TPS_S=0.5510;
+function timePct(ms,n)  { if((n||N)!==4) return null; var t=ms/1000; if(t<=0) return null; return (1-normCDF((Math.log(t)-TIME_MU)/TIME_S))*100; }
+function tpsPct(tps)    { if(tps<=0) return null; return normCDF((Math.log(tps)-TPS_MU)/TPS_S)*100; }
+function fmtPct(p)      { if(p===null||p===undefined) return ''; return p.toFixed(1)+'%'; }
+
+// f = fraction of puzzle solved = (80 - md) / 80
+// fT% = f * timePct,  fM% = f * movesPct
+// Both approach 0 at start (md≈80), grow to full pct as puzzle is solved (md→0)
+// f = (1 - md/maxMD)^2, 0 at fully scrambled, 1 at solved
+function timePctLive(ms)  { var p=timePct(ms);  if(p===null) return null; return getF()*p; }
+function movesPctLive(m)  { var p=movesPct(m);  if(p===null) return null; return getF()*p; }
+
+
 function onSolved() {
   if (mode==='free'||mode==='explore') return;
   finished=true; stopTimer();
   solves++;
   var t=timerMs, m=moves, opt=currentOptimal;
   var tps = t>0 ? (m/(t/1000)) : 0;
-  solveTimes.push(t); solveMoves.push(m); solveOpts.push(opt); solveTps.push(tps);
+  solveTimes.push(t); solveOpts.push(opt); solveTps.push(tps);
+  if(m>=50) solveMoves.push(m); else solveMoves.push(null);
   var isPB=bestSingle===null||t<bestSingle;
   if(isPB) bestSingle=t;
-  if(bestMovesVal===null||m<bestMovesVal) bestMovesVal=m;
+  if(m>=50&&(bestMovesVal===null||m<bestMovesVal)) bestMovesVal=m;
   save();
-  waveAnim(function(){
-    var ot=document.getElementById('ov-title');
-    ot.textContent=isPB?'🏆 Best!':'Solved';
-    ot.className='ov-title'+(isPB?' pb':'');
-    document.getElementById('ov-time').textContent=fmtMs(t);
-    document.getElementById('ov-sub').textContent=m+' move'+(m!==1?'s':'');
-    var optEl=document.getElementById('ov-opt');
-    if(opt!==null){ var diff=m-opt; optEl.textContent='optimal: '+opt+(diff>0?' (+'+diff+')':''); }
-    else optEl.textContent='';
-    document.getElementById('overlay').classList.add('show');
-    setTimeout(function(){ document.getElementById('overlay').classList.remove('show'); newGame(); },2200);
-  });
-  renderLog(); renderSession(); renderBest();
+  var tpctEl=document.getElementById('tb-tpct');
+  var mpctEl=document.getElementById('tb-mpct');
+  if(tpctEl) tpctEl.textContent = fmtPct(timePct(t))||'—';
+  if(mpctEl) mpctEl.textContent = fmtPct(movesPct(m))||'—';
+  waveAnim(function(){});
+  updateProgressBar();
+  renderLog(); renderSession(); renderBest(); updateRemovePBBtn();
 }
 
 function waveAnim(cb) {
@@ -1052,7 +1213,16 @@ function waveAnim(cb) {
 var tpsInterval = null;
 function startTimer() {
   rafT0=performance.now()-timerMs;
-  function tick(){ timerMs=performance.now()-rafT0; var s=document.getElementById('tb-time'),l=document.getElementById('l-time'); if(s)s.textContent=fmtMs(timerMs); if(l)l.textContent=fmtMs(timerMs); rafId=requestAnimationFrame(tick); }
+  function tick(){
+    timerMs=performance.now()-rafT0;
+    var l=document.getElementById('l-time'); if(l)l.textContent=fmtMs(timerMs);
+    set4x('tb-time',fmtMs(timerMs));
+    if(N===4&&(mode==='timed'||mode==='explore')&&started&&!finished){
+      var tpctEl=document.getElementById('tb-tpct');
+      if(tpctEl) tpctEl.textContent=fmtPct(timePctLive(timerMs))||'—';
+    }
+    rafId=requestAnimationFrame(tick);
+  }
   rafId=requestAnimationFrame(tick);
   if(tpsInterval) clearInterval(tpsInterval);
   tpsInterval=setInterval(updateTps, 10);
@@ -1069,6 +1239,16 @@ function fmtMs(ms) {
 // ════════════════════════════════════════════════════════════
 var TILE_SIZES={3:100,4:86,5:72,6:60,7:52,8:46,9:40,10:36};
 var FONT_SIZES={3:28,4:24,5:20,6:17,7:15,8:13,9:11,10:10};
+
+function updateProgressBar() {
+  var f100=(getF()*100).toFixed(1);
+  // timed/explore bar
+  var fpct=document.getElementById('tb-fpct'); if(fpct) fpct.textContent=f100+'%';
+  var fbar=document.getElementById('tb-fbar'); if(fbar) fbar.style.width=f100+'%';
+  // freestyle bar
+  var fspct=document.getElementById('fs-fpct'); if(fspct) fspct.textContent=f100+'%';
+  var fsbar=document.getElementById('fs-fbar'); if(fsbar) fsbar.style.width=f100+'%';
+}
 
 function renderGrid() {
   _gridEl = null;
@@ -1102,6 +1282,7 @@ function renderGrid() {
     el.style.fontSize=fs+'px';
     updateTileEl(el, idx);
   }
+  updateProgressBar();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1125,80 +1306,79 @@ function clearHL() { var h=document.querySelectorAll('.hl'); for(var i=0;i<h.len
 // ════════════════════════════════════════════════════════════
 function initEvents() {
   var grid=document.getElementById('grid');
-  var lastTileIdx = -1;
-
-  function handleTile(el) {
-    if(!el||finished) return;
-    if(!el.classList.contains('tile')) el=el.closest ? el.closest('.tile') : null;
-    if(!el||el.classList.contains('empty')) return;
-    var idx=+el.dataset.idx;
-    if(idx===lastTileIdx) return;
-    lastTileIdx=idx;
-    var e0=ei(), er=Math.floor(e0/N), ec=e0%N;
-    var ir=Math.floor(idx/N), ic=idx%N;
-    if(ir!==er&&ic!==ec) { lastTileIdx=-1; return; }
-    doMoveIdx(idx);
-    lastTileIdx=-1;
-  }
-
-  // HOVER: mouseover fires once per tile entry
-  grid.addEventListener('mouseover', function(e) {
-    if(control!=='hover') return;
-    handleTile(e.target);
-  });
 
   grid.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
-  // HOVER on mouse: mouseover fires once per tile (efficient)
-  grid.addEventListener('mouseover', function(e) {
-    if(control!=='hover'||finished) return;
-    handleTile(e.target);
+  // CLICK mode
+  grid.addEventListener('click', function(e) {
+    if(control!=='click') return;
+    var el=e.target.closest ? e.target.closest('.tile') : e.target;
+    if(!el||el.classList.contains('empty')) return;
+    doMoveIdx(+el.dataset.idx);
   });
-  // pointerdown fires once per interaction regardless of touch/mouse/pen
+
+  // DRAGSLIDE mode
   grid.addEventListener('pointerdown', function(e) {
+    if(control!=='drag') return;
+    if(finished) return;
+    var el=e.target.closest ? e.target.closest('.tile') : e.target;
+    if(!el) return;
     e.preventDefault();
-    pHeld=true; lastTileIdx=-1;
-
-    var idx=-1;
-    if(e.pointerType==='touch') {
-      // Use geometry for touch (elementFromPoint unreliable under finger)
-      var rect=grid.getBoundingClientRect();
-      var ts=TILE_SIZES[N]||86;
-      var col=Math.floor((e.clientX-rect.left)/ts);
-      var row=Math.floor((e.clientY-rect.top)/ts);
-      if(col>=0&&col<N&&row>=0&&row<N) idx=row*N+col;
-    } else {
-      var el=e.target;
-      if(!el.classList.contains('tile')) el=el.closest?el.closest('.tile'):null;
-      if(el&&!el.classList.contains('empty')) idx=+el.dataset.idx;
+    pHeld=true; pLastIdx=-1;
+    if(grid.setPointerCapture) grid.setPointerCapture(e.pointerId);
+    if(!el.classList.contains('empty')){
+      doMoveIdx(+el.dataset.idx);
+      pLastIdx=emptyIdx;
     }
-
-    if(idx<0||tiles[idx]===0) return;
-    var e0=ei(), er=Math.floor(e0/N), ec=e0%N;
+  });
+  grid.addEventListener('pointermove', function(e) {
+    if(control!=='drag'||!pHeld||finished) return;
+    var rect=grid.getBoundingClientRect();
+    var ts=TILE_SIZES[N]||86;
+    var col=Math.floor((e.clientX-rect.left)/ts);
+    var row=Math.floor((e.clientY-rect.top)/ts);
+    if(col<0||col>=N||row<0||row>=N) return;
+    var idx=row*N+col;
+    if(idx===pLastIdx||tiles[idx]===0) return;
+    var e0=emptyIdx, er=Math.floor(e0/N), ec=e0%N;
     var ir=Math.floor(idx/N), ic=idx%N;
     if(ir!==er&&ic!==ec) return;
-    if(control==='click'||control==='drag'||control==='hover') doMoveIdx(idx);
+    var count=doMoveIdx(idx);
+    if(count>0) pLastIdx=emptyIdx;
   });
+  document.addEventListener('pointerup',     function(){ pHeld=false; pLastIdx=-1; clearHL(); });
+  document.addEventListener('pointercancel', function(){ pHeld=false; pLastIdx=-1; clearHL(); });
 
-  // pointermove for drag and hover
-  grid.addEventListener('pointermove', function(e) {
-    if(finished) return;
-    if(control==='hover'||(control==='drag'&&pHeld)) {
-      var rect=grid.getBoundingClientRect();
-      var ts=TILE_SIZES[N]||86;
-      var col=Math.floor((e.clientX-rect.left)/ts);
-      var row=Math.floor((e.clientY-rect.top)/ts);
-      if(col<0||col>=N||row<0||row>=N) return;
-      var el=grid.children[row*N+col];
-      if(el) handleTile(el);
-    }
+  // HOVER mode - mouseover fires once per tile entry
+  grid.addEventListener('mouseover', function(e) {
+    if(control!=='hover'||finished) return;
+    var el=e.target.closest ? e.target.closest('.tile') : e.target;
+    if(!el||el.classList.contains('empty')) return;
+    var idx=+el.dataset.idx;
+    if(tiles[idx]===0) return;
+    var e0=emptyIdx, er=Math.floor(e0/N), ec=e0%N;
+    var ir=Math.floor(idx/N), ic=idx%N;
+    if(ir!==er&&ic!==ec) return;
+    doMoveIdx(idx);
   });
-
-  document.addEventListener('pointerup',     function(){ pHeld=false; lastTileIdx=-1; });
-  document.addEventListener('pointercancel', function(){ pHeld=false; lastTileIdx=-1; });
-
-  grid.addEventListener('touchend',    function(){ pHeld=false; lastTileIdx=-1; gridRect=null; });
-  grid.addEventListener('touchcancel', function(){ pHeld=false; lastTileIdx=-1; gridRect=null; });
+  // HOVER touch support
+  grid.addEventListener('touchmove', function(e) {
+    if(control!=='hover'||finished) return;
+    e.preventDefault();
+    var t=e.touches[0]; if(!t) return;
+    var rect=grid.getBoundingClientRect();
+    var ts=TILE_SIZES[N]||86;
+    var col=Math.floor((t.clientX-rect.left)/ts);
+    var row=Math.floor((t.clientY-rect.top)/ts);
+    if(col<0||col>=N||row<0||row>=N) return;
+    var idx=row*N+col;
+    if(tiles[idx]===0) return;
+    var e0=emptyIdx, er=Math.floor(e0/N), ec=e0%N;
+    var ir=Math.floor(idx/N), ic=idx%N;
+    if(ir!==er&&ic!==ec) return;
+    doMoveIdx(idx);
+  }, {passive:false});
+  grid.addEventListener('mouseleave', function(){ pLastIdx=-1; clearHL(); });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1219,7 +1399,10 @@ function onCustomInput() {
 
   var parts=raw.split(/[\s,]+/).filter(function(x){return x!=='';});
   var size=N*N;
-  if(parts.length!==size){ badge.textContent='Need '+size+' numbers'; badge.className='solvability-badge unsolvable'; inp.className='scramble-input invalid'; return; }
+  if(parts.length!==size){
+    if(parts.length>0){ badge.textContent='Need '+size+' numbers'; badge.className='solvability-badge unsolvable'; inp.className='scramble-input invalid'; }
+    return;
+  }
 
   var nums=parts.map(function(p){ return parseInt(p,10); });
   if(nums.some(isNaN)){ badge.textContent='Invalid numbers'; badge.className='solvability-badge unsolvable'; inp.className='scramble-input invalid'; return; }
@@ -1255,7 +1438,7 @@ function updateUI() {
   document.getElementById('l-moves').textContent  =moves;
   document.getElementById('l-solves').textContent =solves;
   if(!started||mode==='free'){ 
-    document.getElementById('tb-time').textContent='0:00.000'; 
+    set4x('tb-time','0:00.000'); 
     document.getElementById('l-time').textContent='—';
     var tpsEl=document.getElementById('tb-tps'); if(tpsEl) tpsEl.textContent='0.00';
   }
@@ -1275,8 +1458,10 @@ function renderLog() {
   for(var ri=0;ri<solveTimes.length;ri++){
     var i=solveTimes.length-1-ri, t=solveTimes[i], m=solveMoves[i], opt=solveOpts[i];
     var tps=solveTps[i]!=null?solveTps[i].toFixed(1):'—';
-    var isPB=t===bestT&&solveTimes.lastIndexOf(bestT)===i;
-    html+='<div class="log-row"><span class="log-n">'+(i+1)+'</span><span class="log-t">'+fmtMs(t)+'</span><span class="log-m">'+m+'</span><span class="log-m">'+tps+'</span></div>';
+    var mDisp=m!=null?m:'—';
+    var pct=t?fmtPct(timePct(t)):'';
+    var mpct=(m!=null)?fmtPct(movesPct(m)):'';
+    html+='<div class="log-row"><span class="log-n">'+(i+1)+'</span><span class="log-t">'+fmtMs(t)+'</span><span class="log-m">'+mDisp+'</span><span class="log-m">'+tps+'</span><span class="log-m" style="color:#1565c0;font-size:9px;text-align:right">'+pct+'</span><span class="log-m" style="color:#2e7d32;font-size:9px;text-align:right">'+mpct+'</span></div>';
   }
   wrap.innerHTML=html;
 }
@@ -1293,7 +1478,8 @@ function renderSession(){
   document.getElementById('s-ao5').textContent   =aoN(5)?fmtMs(aoN(5)):'—';
   document.getElementById('s-ao12').textContent  =aoN(12)?fmtMs(aoN(12)):'—';
   document.getElementById('s-mean').textContent  =avg(solveTimes)?fmtMs(avg(solveTimes)):'—';
-  var mAo5=aoNArr(solveMoves,5), mAo12=aoNArr(solveMoves,12), mMean=avg(solveMoves);
+  var movesFiltered=solveMoves.filter(function(x){return x!=null;});
+  var mAo5=aoNArr(movesFiltered,5), mAo12=aoNArr(movesFiltered,12), mMean=avg(movesFiltered);
   document.getElementById('s-mv-ao5').textContent  =mAo5!=null?mAo5.toFixed(1):'—';
   document.getElementById('s-mv-ao12').textContent =mAo12!=null?mAo12.toFixed(1):'—';
   document.getElementById('s-mv-mean').textContent =mMean!=null?mMean.toFixed(1):'—';
@@ -1304,6 +1490,7 @@ function renderSession(){
 }
 function renderBest(){
   document.getElementById('b-single').textContent = bestSingle!=null ? fmtMs(bestSingle) : '—';
+  document.getElementById('b-single-pct').textContent = bestSingle!=null ? fmtPct(timePct(bestSingle)) : '—';
   // Best time averages
   var ba5=null, ba12=null, bmean=avg(solveTimes);
   for(var i=4;i<solveTimes.length;i++){var a=aoNArr(solveTimes.slice(0,i+1),5); if(a!=null&&(ba5===null||a<ba5))ba5=a;}
@@ -1313,9 +1500,11 @@ function renderBest(){
   document.getElementById('b-mean').textContent = bmean!=null ? fmtMs(bmean) : '—';
   // Best moves
   document.getElementById('b-moves').textContent = bestMovesVal!=null ? bestMovesVal : '—';
-  var bma5=null, bma12=null, bmmean=avg(solveMoves);
-  for(var k=4;k<solveMoves.length;k++){var c=aoNArr(solveMoves.slice(0,k+1),5); if(c!=null&&(bma5===null||c<bma5))bma5=c;}
-  for(var l=11;l<solveMoves.length;l++){var d=aoNArr(solveMoves.slice(0,l+1),12); if(d!=null&&(bma12===null||d<bma12))bma12=d;}
+  document.getElementById('b-moves-pct').textContent = bestMovesVal!=null ? fmtPct(movesPct(bestMovesVal)) : '—';
+  var movesF=solveMoves.filter(function(x){return x!=null;});
+  var bma5=null, bma12=null, bmmean=avg(movesF);
+  for(var k=4;k<movesF.length;k++){var c=aoNArr(movesF.slice(0,k+1),5); if(c!=null&&(bma5===null||c<bma5))bma5=c;}
+  for(var l=11;l<movesF.length;l++){var d=aoNArr(movesF.slice(0,l+1),12); if(d!=null&&(bma12===null||d<bma12))bma12=d;}
   document.getElementById('b-mv-ao5').textContent  = bma5!=null   ? bma5.toFixed(1)   : '—';
   document.getElementById('b-mv-ao12').textContent = bma12!=null  ? bma12.toFixed(1)  : '—';
   document.getElementById('b-mv-mean').textContent = bmmean!=null ? bmmean.toFixed(1) : '—';
@@ -1330,13 +1519,24 @@ function renderBest(){
   document.getElementById('b-tps-mean').textContent= btmean!=null  ? btmean.toFixed(2)  : '—';
 }
 
+function onPEInput() {
+  var tVal = parseFloat(document.getElementById('pe-time').value);
+  var mVal = parseInt(document.getElementById('pe-moves').value, 10);
+  var tOut = document.getElementById('pe-time-out');
+  var mOut = document.getElementById('pe-moves-out');
+  tOut.textContent = (!isNaN(tVal) && tVal > 0) ? fmtPct(timePct(tVal * 1000)) : '—';
+  mOut.textContent = (!isNaN(mVal) && mVal > 0) ? fmtPct(movesPct(mVal)) : '—';
+}
+
 function deleteSolve() {
   var inp=document.getElementById('del-input');
   var badge=document.getElementById('del-badge');
   var n=parseInt(inp.value,10);
   if(isNaN(n)||n<1||n>solveTimes.length) {
-    badge.className='solvability-badge unsolvable';
-    badge.textContent='Invalid: enter 1–'+solveTimes.length;
+    if(inp.value.trim()!=='') {
+      badge.className='solvability-badge unsolvable';
+      badge.textContent='Invalid: enter 1–'+solveTimes.length;
+    }
     return;
   }
   var idx=n-1;
@@ -1345,7 +1545,7 @@ function deleteSolve() {
   solves=solveTimes.length;
   // Recalculate bests
   bestSingle   = solveTimes.length ? Math.min.apply(null,solveTimes) : null;
-  bestMovesVal = solveMoves.length ? Math.min.apply(null,solveMoves) : null;
+  bestMovesVal = solveMoves.filter(function(x){return x!=null;}).length ? Math.min.apply(null,solveMoves.filter(function(x){return x!=null;})) : null;
   inp.value='';
   badge.className='solvability-badge solvable';
   badge.textContent='Deleted solve #'+n;
@@ -1370,11 +1570,11 @@ function setMode(m) {
   document.getElementById('btn-toggletimer').style.display= isExplore ? '' : 'none';
   document.getElementById('btn-resettimer').style.display = isExplore ? '' : 'none';
   document.getElementById('fs-note').style.display        = isFree ? '' : 'none';
+  document.getElementById('fs-progress').style.display    = isFree ? '' : 'none';
   document.getElementById('scramble-section').style.display = isTimed ? 'none' : '';
   document.getElementById('stopatbox').style.display        = isExplore ? '' : 'none';
-  document.getElementById('tb-time-box').style.display    = isFree ? 'none' : '';
-  document.getElementById('tb-tps-box').style.display     = isFree ? 'none' : '';
   document.getElementById('tb-lbl').textContent = 'Time';
+  updateTimerBars();
   newGame(); renderLog(); renderSession(); renderBest();
 }
 
@@ -1424,6 +1624,9 @@ function onSizeChange(v) {
   tiles=(mode==='free'||mode==='explore')?solvedState(N):shuffle(N);
   emptyIdx=tiles.indexOf(0);
   document.getElementById('overlay').classList.remove('show');
+  updateTimerBars();
+  var tpctEl=document.getElementById('tb-tpct'); if(tpctEl) tpctEl.textContent='—';
+  var mpctEl=document.getElementById('tb-mpct'); if(mpctEl) mpctEl.textContent='—';
   updateUI(); renderGrid(); renderLog(); renderSession(); renderBest(); schedSolver(); save();
 }
 
@@ -1459,6 +1662,7 @@ setMode(mode);
 renderLog();
 renderSession();
 renderBest();
+updateRemovePBBtn();
 </script>
 </body>
 </html>
