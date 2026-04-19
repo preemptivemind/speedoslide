@@ -125,6 +125,7 @@ input[type=range] {
   padding: 0;
   touch-action: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ── Tiles ── */
@@ -134,6 +135,8 @@ input[type=range] {
   font-weight: 700;
   cursor: grab;
   position: relative;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .tile:not(.empty):active { cursor: grabbing; }
 .tile.empty {
@@ -1309,30 +1312,86 @@ function initEvents() {
 
   grid.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
-  // CLICK mode
+  // CLICK mode — physical slide on mobile, click on desktop
+  var clickTouchStartX=0, clickTouchStartY=0, clickTouchTileIdx=-1;
+  var clickTouchAxis='';
+  var clickTouchMoved=false;
+  var lastTouchEnd=0; // timestamp to suppress ghost clicks
+
   grid.addEventListener('click', function(e) {
     if(control!=='click') return;
+    // Suppress ghost click after touch — 400ms window
+    if(Date.now()-lastTouchEnd<400) return;
     var el=e.target.closest ? e.target.closest('.tile') : e.target;
     if(!el||el.classList.contains('empty')) return;
     doMoveIdx(+el.dataset.idx);
   });
 
+  grid.addEventListener('touchstart', function(e) {
+    if(control!=='click'||finished) return;
+    e.preventDefault();
+    clickTouchMoved=false;
+    var t=e.touches[0]; if(!t) return;
+    clickTouchStartX=t.clientX; clickTouchStartY=t.clientY;
+    var el=document.elementFromPoint(t.clientX, t.clientY);
+    if(el) el=el.closest ? el.closest('.tile') : el;
+    if(!el||!el.classList.contains('tile')||el.classList.contains('empty')){ clickTouchTileIdx=-1; clickTouchAxis=''; return; }
+    clickTouchTileIdx=+el.dataset.idx;
+    var ir=Math.floor(clickTouchTileIdx/N), ic=clickTouchTileIdx%N;
+    var er=Math.floor(emptyIdx/N),           ec=emptyIdx%N;
+    if(ir===er)      clickTouchAxis='h';
+    else if(ic===ec) clickTouchAxis='v';
+    else             clickTouchAxis='';
+  }, {passive:false});
+
+  grid.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if(finished||control!=='click') return;
+    if(clickTouchTileIdx<0||clickTouchAxis==='') return;
+    var t=e.touches[0]; if(!t) return;
+    var dx=t.clientX-clickTouchStartX, dy=t.clientY-clickTouchStartY;
+    var ir=Math.floor(clickTouchTileIdx/N), ic=clickTouchTileIdx%N;
+    var er=Math.floor(emptyIdx/N),           ec=emptyIdx%N;
+    var shouldMove=false;
+    if(clickTouchAxis==='h') {
+      if(ec<ic && dx<0) shouldMove=true;
+      if(ec>ic && dx>0) shouldMove=true;
+    } else if(clickTouchAxis==='v') {
+      if(er<ir && dy<0) shouldMove=true;
+      if(er>ir && dy>0) shouldMove=true;
+    }
+    if(shouldMove) {
+      clickTouchMoved=true;
+      doMoveIdx(clickTouchTileIdx);
+      clickTouchStartX=t.clientX; clickTouchStartY=t.clientY;
+      clickTouchTileIdx=-1; clickTouchAxis='';
+    }
+  }, {passive:false});
+
+  grid.addEventListener('touchend', function(e) {
+    lastTouchEnd=Date.now();
+    if(control==='click' && !clickTouchMoved && clickTouchTileIdx>=0) {
+      doMoveIdx(clickTouchTileIdx);
+    }
+    clickTouchTileIdx=-1; clickTouchAxis=''; clickTouchMoved=false;
+  }, {passive:true});
+
   // DRAGSLIDE mode
   grid.addEventListener('pointerdown', function(e) {
-    if(control!=='drag') return;
+    if(control!=='drag' && control!=='hover') return;
     if(finished) return;
     var el=e.target.closest ? e.target.closest('.tile') : e.target;
     if(!el) return;
     e.preventDefault();
     pHeld=true; pLastIdx=-1;
     if(grid.setPointerCapture) grid.setPointerCapture(e.pointerId);
-    if(!el.classList.contains('empty')){
+    if(control==='drag' && !el.classList.contains('empty')){
       doMoveIdx(+el.dataset.idx);
       pLastIdx=emptyIdx;
     }
   });
   grid.addEventListener('pointermove', function(e) {
-    if(control!=='drag'||!pHeld||finished) return;
+    if((control!=='drag' && control!=='hover')||!pHeld||finished) return;
     var rect=grid.getBoundingClientRect();
     var ts=TILE_SIZES[N]||86;
     var col=Math.floor((e.clientX-rect.left)/ts);
@@ -1349,7 +1408,7 @@ function initEvents() {
   document.addEventListener('pointerup',     function(){ pHeld=false; pLastIdx=-1; clearHL(); });
   document.addEventListener('pointercancel', function(){ pHeld=false; pLastIdx=-1; clearHL(); });
 
-  // HOVER mode - mouseover fires once per tile entry
+  // HOVER mode — desktop mouseover (no press needed)
   grid.addEventListener('mouseover', function(e) {
     if(control!=='hover'||finished) return;
     var el=e.target.closest ? e.target.closest('.tile') : e.target;
@@ -1361,23 +1420,6 @@ function initEvents() {
     if(ir!==er&&ic!==ec) return;
     doMoveIdx(idx);
   });
-  // HOVER touch support
-  grid.addEventListener('touchmove', function(e) {
-    if(control!=='hover'||finished) return;
-    e.preventDefault();
-    var t=e.touches[0]; if(!t) return;
-    var rect=grid.getBoundingClientRect();
-    var ts=TILE_SIZES[N]||86;
-    var col=Math.floor((t.clientX-rect.left)/ts);
-    var row=Math.floor((t.clientY-rect.top)/ts);
-    if(col<0||col>=N||row<0||row>=N) return;
-    var idx=row*N+col;
-    if(tiles[idx]===0) return;
-    var e0=emptyIdx, er=Math.floor(e0/N), ec=e0%N;
-    var ir=Math.floor(idx/N), ic=idx%N;
-    if(ir!==er&&ic!==ec) return;
-    doMoveIdx(idx);
-  }, {passive:false});
   grid.addEventListener('mouseleave', function(){ pLastIdx=-1; clearHL(); });
 }
 
@@ -1582,7 +1624,6 @@ function setControl(c) {
   control=c;
   document.getElementById('tog-click').classList.toggle('active', c==='click');
   document.getElementById('tog-drag').classList.toggle('active',  c==='drag');
-  document.getElementById('tog-hover').classList.toggle('active', c==='hover');
   var grid=document.getElementById('grid');
   grid.classList.toggle('hover-mode', c==='hover');
   pHeld=false; pLastIdx=-1; clearHL();
@@ -1653,7 +1694,7 @@ document.getElementById('size-val').textContent=N+' × '+N;
   var s2=id.replace('tog-',''); if(s2==='rainbow') s2='none';
   document.getElementById(id).classList.toggle('active', scheme===s2);
 });
-['tog-click','tog-drag','tog-hover'].forEach(function(id){
+['tog-click','tog-drag'].forEach(function(id){
   document.getElementById(id).classList.toggle('active', control===id.replace('tog-',''));
 });
 
