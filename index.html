@@ -149,7 +149,20 @@ input[type=range] {
   -webkit-user-select: none;
 }
 .tile.hl { outline: 2px solid rgba(21,101,192,.7) !important; outline-offset: -3px; filter: brightness(1.15); }
-.hover-mode .tile:not(.empty) { cursor: crosshair; }
+.laser-mode .tile:not(.empty) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='4' fill='%23ff0000' opacity='0.9'/%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='%23ff0000' stroke-width='1' opacity='0.5'/%3E%3C/svg%3E") 12 12, crosshair; }
+
+/* ── Laser dot ── */
+#laser {
+  position: fixed;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: rgba(255,50,50,0.85);
+  box-shadow: 0 0 6px 2px rgba(255,80,80,0.6), 0 0 14px 4px rgba(255,30,30,0.3);
+  pointer-events: none;
+  transform: translate(-50%,-50%);
+  display: none;
+  z-index: 9999;
+}
 
 /* ── Overlay ── */
 .overlay {
@@ -354,6 +367,7 @@ input[type=range] {
 
     <div class="grid-wrap">
       <div class="grid" id="grid"></div>
+      <div id="laser"></div>
       <div class="overlay" id="overlay">
         <div class="ov-title" id="ov-title">Solved</div>
         <div class="ov-time"  id="ov-time">0:00.0</div>
@@ -1240,8 +1254,8 @@ function fmtMs(ms) {
 // ════════════════════════════════════════════════════════════
 //  RENDER
 // ════════════════════════════════════════════════════════════
-var TILE_SIZES={3:100,4:86,5:72,6:60,7:52,8:46,9:40,10:36};
-var FONT_SIZES={3:28,4:24,5:20,6:17,7:15,8:13,9:11,10:10};
+var TILE_SIZES={3:108,4:92,5:78,6:65,7:56,8:50,9:44,10:39};
+var FONT_SIZES={3:30,4:26,5:22,6:18,7:16,8:14,9:12,10:11};
 
 function updateProgressBar() {
   var f100=(getF()*100).toFixed(1);
@@ -1320,8 +1334,8 @@ function initEvents() {
 
   grid.addEventListener('click', function(e) {
     if(control!=='click') return;
-    // Suppress ghost click after touch — 400ms window
-    if(Date.now()-lastTouchEnd<400) return;
+    // Suppress ghost click after touch — 15ms window
+    if(Date.now()-lastTouchEnd<15) return;
     var el=e.target.closest ? e.target.closest('.tile') : e.target;
     if(!el||el.classList.contains('empty')) return;
     doMoveIdx(+el.dataset.idx);
@@ -1390,7 +1404,22 @@ function initEvents() {
       pLastIdx=emptyIdx;
     }
   });
+  // Laser dot + ghost click suppression
+  var laserEl = document.getElementById('laser');
+  var lastMoveTime = 0;
+
+  function showLaser(x, y) {
+    laserEl.style.left = x+'px';
+    laserEl.style.top  = y+'px';
+    laserEl.style.display = 'block';
+  }
+  function hideLaser() { laserEl.style.display='none'; }
+
   grid.addEventListener('pointermove', function(e) {
+    if(control==='drag'||control==='hover') {
+      showLaser(e.clientX, e.clientY);
+      lastMoveTime = Date.now();
+    }
     if((control!=='drag' && control!=='hover')||!pHeld||finished) return;
     var rect=grid.getBoundingClientRect();
     var ts=TILE_SIZES[N]||86;
@@ -1405,8 +1434,16 @@ function initEvents() {
     var count=doMoveIdx(idx);
     if(count>0) pLastIdx=emptyIdx;
   });
-  document.addEventListener('pointerup',     function(){ pHeld=false; pLastIdx=-1; clearHL(); });
-  document.addEventListener('pointercancel', function(){ pHeld=false; pLastIdx=-1; clearHL(); });
+  document.addEventListener('pointerup', function(){ pHeld=false; pLastIdx=-1; clearHL(); });
+  document.addEventListener('pointercancel', function(){ pHeld=false; pLastIdx=-1; clearHL(); hideLaser(); });
+  grid.addEventListener('pointerleave', function(){ hideLaser(); });
+
+  // Ghost click suppression — ignore clicks within 15ms of last pointermove in drag/hover
+  grid.addEventListener('click', function(e) {
+    if(control==='drag'||control==='hover') {
+      if(Date.now()-lastMoveTime < 15) { e.stopImmediatePropagation(); return; }
+    }
+  }, true);
 
   // HOVER mode — desktop mouseover (no press needed)
   grid.addEventListener('mouseover', function(e) {
@@ -1420,7 +1457,7 @@ function initEvents() {
     if(ir!==er&&ic!==ec) return;
     doMoveIdx(idx);
   });
-  grid.addEventListener('mouseleave', function(){ pLastIdx=-1; clearHL(); });
+  grid.addEventListener('mouseleave', function(){ pLastIdx=-1; clearHL(); hideLaser(); });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1624,9 +1661,12 @@ function setControl(c) {
   control=c;
   document.getElementById('tog-click').classList.toggle('active', c==='click');
   document.getElementById('tog-drag').classList.toggle('active',  c==='drag');
+  document.getElementById('tog-hover').classList.toggle('active', c==='hover');
   var grid=document.getElementById('grid');
   grid.classList.toggle('hover-mode', c==='hover');
+  grid.classList.toggle('laser-mode', c==='drag'||c==='hover');
   pHeld=false; pLastIdx=-1; clearHL();
+  var laserEl=document.getElementById('laser'); if(laserEl) laserEl.style.display='none';
   save();
 }
 
@@ -1694,9 +1734,10 @@ document.getElementById('size-val').textContent=N+' × '+N;
   var s2=id.replace('tog-',''); if(s2==='rainbow') s2='none';
   document.getElementById(id).classList.toggle('active', scheme===s2);
 });
-['tog-click','tog-drag'].forEach(function(id){
+['tog-click','tog-drag','tog-hover'].forEach(function(id){
   document.getElementById(id).classList.toggle('active', control===id.replace('tog-',''));
 });
+(function(){ var g=document.getElementById('grid'); g.classList.toggle('laser-mode', control==='drag'||control==='hover'); })();
 
 initEvents();
 setMode(mode);
