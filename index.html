@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>15 Puzzle</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+button, input, select, textarea { -webkit-user-select: auto; user-select: auto; }
+body, div, span, p, h1, h2, h3, h4, h5, h6 { user-select: none; -webkit-user-select: none; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
   background: #f5f5f5;
@@ -284,6 +286,8 @@ input[type=range] {
         <button class="btn primary" onclick="newGame()">New Game</button>
         <button class="btn" id="btn-scramble" style="display:none" onclick="doScramble()">Random Scramble</button>
         <button class="btn" id="btn-solved" style="display:none" onclick="goSolved()">Solved Position</button>
+        <button class="btn" id="btn-solve" style="display:none" onclick="doAutoSolve()">Solve (Optimal)</button>
+        <button class="btn danger" id="btn-stopsolve" style="display:none" onclick="stopAutoSolve()">Stop Solving</button>
         <button class="btn" id="btn-resetmoves" style="display:none" onclick="resetMoves()">Reset Movecount</button>
         <button class="btn" id="btn-toggletimer" style="display:none" onclick="toggleExploreTimer()">Stop Timer</button>
         <button class="btn" id="btn-resettimer" style="display:none" onclick="resetExploreTimer()">Reset Timer</button>
@@ -339,6 +343,15 @@ input[type=range] {
         <div class="timer-box"><div class="t-label">Moves</div><div class="t-val" id="tb-moves">0</div></div>
         <div class="timer-box" id="tb-tps-box"><div class="t-label">TPS</div><div class="t-val" id="tb-tps">0.0</div></div>
         <div class="timer-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt">…</div></div>
+      </div>
+      <div id="tb-progress-single" style="display:none;background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:6px 10px;margin-top:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#bbb">Solved</span>
+          <span style="font-size:13px;font-weight:700;color:#1565c0" id="tb-fpct-s">0.0%</span>
+        </div>
+        <div style="background:#e0e0e0;border-radius:3px;height:10px;overflow:hidden">
+          <div id="tb-fbar-s" style="height:100%;width:0%;background:linear-gradient(90deg,#1565c0,#42a5f5);border-radius:3px"></div>
+        </div>
       </div>
     </div>
 
@@ -399,9 +412,16 @@ input[type=range] {
         <div class="tog-row">
           <span class="tog-label">Control</span>
           <div class="tog-group">
-            <button class="tog-btn active" id="tog-click"   onclick="setControl('click')">Click</button>
+            <button class="tog-btn active" id="tog-click"   onclick="setControl('click')">Slide</button>
             <button class="tog-btn"        id="tog-drag"    onclick="setControl('drag')">Dragslide</button>
             <button class="tog-btn"        id="tog-hover"   onclick="setControl('hover')">Hover</button>
+          </div>
+        </div>
+        <div class="tog-row">
+          <span class="tog-label">Laser</span>
+          <div class="tog-group">
+            <button class="tog-btn" id="tog-laser-on"  onclick="setLaser(true)">On</button>
+            <button class="tog-btn active" id="tog-laser-off" onclick="setLaser(false)">Off</button>
           </div>
         </div>
         <div class="tog-row">
@@ -529,6 +549,7 @@ function load() {
     N = Math.min(10, Math.max(3, d.N || 4));
     scheme  = d.scheme  || 'none';
     control = d.control || 'click';
+    laserOn = !!d.laserOn;
     // Load session per size
     var sessions = d.sessions || {};
     var ns = sessions[N] || {};
@@ -552,7 +573,7 @@ function save() {
     var sessions = d.sessions || {};
     sessions[N] = {solveTimes:solveTimes, solveMoves:solveMoves, solveOpts:solveOpts, solveTps:solveTps};
     localStorage.setItem('15pz7', JSON.stringify({
-      N:N, scheme:scheme, control:control,
+      N:N, scheme:scheme, control:control, laserOn:laserOn,
       bests:bests, sessions:sessions
     }));
   } catch(e) {}
@@ -609,89 +630,161 @@ function clearAll() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  IDA* SOLVER — time-sliced, yields every 5ms
+//  IDA* SOLVER — time-sliced, incremental heuristic
 // ════════════════════════════════════════════════════════════
 var solverToken = 0;
 var solverTimer = null;
-
 var DR=[-1,1,0,0], DC=[0,0,-1,1], OPP=[1,0,3,2];
 
-function h(t, n, gp) {
-  var s=0, size=n*n, i, v, g, r, c, c2, v1, v2, g1, g2;
+// ════════════════════════════════════════════════════════════
+//  HEURISTIC: Manhattan Distance + Linear Conflict (rows + cols)
+//  + corner/last-tile corrections for tighter lower bound
+// ════════════════════════════════════════════════════════════
+function hFull(t, n, gp) {
+  var s=0, size=n*n, i, v, g, r, c, r2, v1, v2, g1, g2;
+  // Manhattan distance
   for(i=0;i<size;i++){ v=t[i]; if(!v) continue; g=gp[v]; s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n); }
+  // Linear conflict — rows
   for(r=0;r<n;r++) for(c=0;c<n-1;c++) {
     v1=t[r*n+c]; if(!v1) continue; g1=gp[v1]; if(Math.floor(g1/n)!==r) continue;
-    for(c2=c+1;c2<n;c2++) { v2=t[r*n+c2]; if(!v2) continue; g2=gp[v2]; if(Math.floor(g2/n)!==r) continue; if(g1>g2) s+=2; }
+    for(var c2=c+1;c2<n;c2++){ v2=t[r*n+c2]; if(!v2) continue; g2=gp[v2]; if(Math.floor(g2/n)!==r) continue; if(g1>g2) s+=2; }
   }
+  // Linear conflict — columns
+  for(c=0;c<n;c++) for(r=0;r<n-1;r++) {
+    v1=t[r*n+c]; if(!v1) continue; g1=gp[v1]; if(g1%n!==c) continue;
+    for(r2=r+1;r2<n;r2++){ v2=t[r2*n+c]; if(!v2) continue; g2=gp[v2]; if(g2%n!==c) continue; if(g1>g2) s+=2; }
+  }
+  // Corner correction: if a corner tile is wrong and its two neighbours are wrong, add 2
+  // Top-left corner: tile 1, neighbours: tile 2 (right) and tile n+1 (below)
+  var corners=[
+    [0,       1,       1,       n],       // TL: pos, tile, right-tile, below-tile
+    [n-1,     n,       n-1,     2*n-1],   // TR
+    [(n-1)*n, n*(n-1)+1, (n-2)*n, (n-1)*n+1], // BL
+    [n*n-1,   n*n-1,  (n-1)*n-1, n*n-2]  // BR (blank goal)
+  ];
+  // TL: goal of tile 1 = pos 0, goal of tile 2 = pos 1, goal of tile n+1 = pos n
+  if(t[0]!==1 && t[1]!==2 && t[n]!==n+1 && gp[1]===0) s+=2;
+  // TR: goal of tile n = pos n-1
+  if(t[n-1]!==n && t[n-2]!==n-1 && t[2*n-1]!==2*n && gp[n]===n-1) s+=2;
   return s;
 }
 
-// Iterative DFS using explicit stack — can be paused and resumed
-function makeStack(snap, bound, n, gp) {
-  var ei=snap.indexOf(0);
-  return [{state:snap.slice(), g:0, last:-1, ei:ei, di:0, min:Infinity}];
+// Incremental Manhattan Distance: when blank swaps with tile v (v was at ni, goes to ei),
+// compute the delta in MD. Tile v's old pos was ni, new pos is ei.
+// deltaMD = |newRow-goalRow| + |newCol-goalCol| - |oldRow-goalRow| - |oldCol-goalCol|
+// We use MD only (no LC) inside the search for speed; LC is used only for initial bound.
+
+function mdOnly(t, n, gp) {
+  var s=0, size=n*n, i, v, g;
+  for(i=0;i<size;i++){ v=t[i]; if(!v) continue; g=gp[v]; s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n); }
+  return s;
 }
 
-function runSlice(stack, bound, n, gp, deadline) {
-  while(stack.length && Date.now()<deadline) {
-    var f = stack[stack.length-1];
-    var h0 = h(f.state,n,gp);
-    if(f.g+h0 > bound) { stack.pop(); continue; }
-    if(h0===0) return 'found';
+function makeStack(snap, n, gp) {
+  var ei=snap.indexOf(0);
+  var h0=mdOnly(snap,n,gp);
+  return [{state:snap.slice(), g:0, last:-1, ei:ei, di:0, min:h0, h:h0}];
+}
 
-    var moved = false;
+function runSlice(stack, bound, n, gp, deadline, savePath) {
+  // Hoisted locals for speed
+  var _DR=DR, _DC=DC, _OPP=OPP;
+  var checkDL = 0;
+  while(stack.length) {
+    // Only check deadline every 1024 iterations to reduce overhead
+    if((checkDL++ & 1023)===0 && Date.now()>=deadline) return 'yield';
+    var f=stack[stack.length-1];
+    if(f.g+f.h > bound) {
+      var mn=f.g+f.h;
+      stack.pop();
+      if(stack.length) { var p=stack[stack.length-1]; if(mn<p.min) p.min=mn; }
+      else return mn;
+      continue;
+    }
+    if(f.h===0) return 'found';
+
+    var moved=false;
     var er=Math.floor(f.ei/n), ec=f.ei%n;
     while(f.di<4) {
       var d=f.di++;
-      if(f.last>=0&&d===OPP[f.last]) continue;
-      var nr=er+DR[d], nc=ec+DC[d];
+      if(f.last>=0&&d===_OPP[f.last]) continue;
+      var nr=er+_DR[d], nc=ec+_DC[d];
       if(nr<0||nr>=n||nc<0||nc>=n) continue;
       var ni=nr*n+nc;
-      var ns=f.state.slice();
-      ns[f.ei]=ns[ni]; ns[ni]=0;
-      var nf=f.g+1+h(ns,n,gp);
+      // Tile at ni moves to ei (blank's old pos). Compute MD delta incrementally.
+      var v=f.state[ni];
+      var g=gp[v];
+      var gr=Math.floor(g/n), gc=g%n;
+      // Old MD contribution: tile v at ni
+      var oldMD=Math.abs(nr-gr)+Math.abs(nc-gc);
+      // New MD contribution: tile v at ei (old blank)
+      var newMD=Math.abs(er-gr)+Math.abs(ec-gc);
+      var nh=f.h+newMD-oldMD;
+      var nf=f.g+1+nh;
       if(nf<=bound) {
-        stack.push({state:ns, g:f.g+1, last:d, ei:ni, di:0, min:Infinity});
+        // Apply move to state (in place, will be undone on pop)
+        f.state[f.ei]=v;
+        f.state[ni]=0;
+        stack.push({state:f.state, g:f.g+1, last:d, ei:ni, di:0, min:nf, h:nh});
         moved=true; break;
       } else {
         if(nf<f.min) f.min=nf;
       }
     }
     if(!moved) {
-      var mn=f.min;
-      stack.pop();
-      if(stack.length) { var p=stack[stack.length-1]; if(mn<p.min) p.min=mn; }
-      else return mn; // exhausted this bound
+      var mn2=f.min;
+      var popped=stack.pop();
+      // Undo move: swap blank back
+      if(stack.length) {
+        var parent=stack[stack.length-1];
+        // Restore: tile that was at parent.ei (now 0) came from popped.ei
+        var tileBack=popped.state[parent.ei];
+        popped.state[parent.ei]=0;
+        popped.state[popped.ei]=tileBack;
+        if(mn2<parent.min) parent.min=mn2;
+      }
+      else return mn2;
     }
   }
-  return 'yield'; // time slice expired
+  return stack.length===0 ? Infinity : 'yield';
 }
 
-function runSolver(snap, n) {
+// Extract solution path from stack
+function extractPath(stack) {
+  var moves=[];
+  for(var i=1;i<stack.length;i++) moves.push(stack[i].last);
+  return moves;
+}
+
+function runSolver(snap, n, onFound) {
   solverToken++;
   var token=solverToken;
   currentOptimal=null;
   setOptDisp('…','');
   var gp=[], size=n*n;
   for(var i=0;i<size-1;i++) gp[i+1]=i; gp[0]=size-1;
-  var bound=h(snap,n,gp);
-  if(bound===0){ currentOptimal=0; setOptDisp('0','exact'); return; }
+  var h0=hFull(snap,n,gp);
+  if(h0===0){ currentOptimal=0; setOptDisp('0','exact'); if(onFound) onFound([]); return; }
+  // For >4x4, IDA* can be slow — show the heuristic lower bound, don't attempt full search
+  if(n>4){ setOptDisp('≥'+h0,'approx'); return; }
+  // Start IDA* from h0 (tighter MD+LC+corner bound)
+  var bound=h0;
   setOptDisp('≥'+bound,'approx');
-  var stack=makeStack(snap,bound,n,gp);
+  var stack=makeStack(snap,n,gp);
 
   function step() {
     if(solverToken!==token) return;
-    var r=runSlice(stack,bound,n,gp,Date.now()+5);
+    var r=runSlice(stack,bound,n,gp,Date.now()+12,false);
     if(solverToken!==token) return;
     if(r==='found') {
       currentOptimal=bound; setOptDisp(String(bound),'exact');
+      if(onFound) onFound(extractPath(stack));
     } else if(r==='yield') {
       solverTimer=setTimeout(step,0);
-    } else if(typeof r==='number') {
-      // exhausted bound, move to next
+    } else if(typeof r==='number' && r>bound && r<999) {
       bound=r;
       setOptDisp('≥'+bound,'approx');
-      stack=makeStack(snap,bound,n,gp);
+      stack=makeStack(snap,n,gp);
       solverTimer=setTimeout(step,0);
     }
   }
@@ -708,6 +801,8 @@ function updateTimerBars() {
   var s=document.getElementById('timer-bar-single'), f=document.getElementById('timer-bar-4x4');
   if(s) s.style.display = is4 ? 'none' : '';
   if(f) f.style.display = is4 ? '' : 'none';
+  var ps=document.getElementById('tb-progress-single');
+  if(ps) ps.style.display = (!is4&&(mode==='timed'||mode==='explore')) ? '' : 'none';
 }
 function setOptDisp(text,state) {
   var col=state==='exact'?'green':state==='approx'?'orange':'';
@@ -905,10 +1000,12 @@ function slideToward(idx) {
 //  GAME FLOW
 // ════════════════════════════════════════════════════════════
 function newGame() {
+  stopAutoSolve();
   cancelSolver(); stopTimer();
   finished=false; started=false; moves=0; timerMs=0;
   currentOptimal=null; setOptDisp('…','');
   pHeld=false; pLastIdx=-1; _tbMoves=null; _lMoves=null; _tbTps=null; _gridEl=null;
+  _tbFpct=null; _tbFbar=null; _tbFpctS=null; _tbFbarS=null; _fsFpct=null; _fsFbar=null;
   tiles = (mode==='free'||mode==='explore') ? solvedState(N) : shuffle(N);
   emptyIdx = tiles.indexOf(0);
   if(mode==='timed') scrambleSnap = tiles.slice();
@@ -919,6 +1016,8 @@ function newGame() {
   var mpctEl=document.getElementById('tb-mpct'); if(mpctEl) mpctEl.textContent='—';
   var fpct2=document.getElementById('tb-fpct'); if(fpct2) fpct2.textContent='0.0%';
   var fbar2=document.getElementById('tb-fbar'); if(fbar2) fbar2.style.width='0%';
+  var fpcts2=document.getElementById('tb-fpct-s'); if(fpcts2) fpcts2.textContent='0.0%';
+  var fbars2=document.getElementById('tb-fbar-s'); if(fbars2) fbars2.style.width='0%';
   var fspct2=document.getElementById('fs-fpct'); if(fspct2) fspct2.textContent='0.0%';
   var fsbar2=document.getElementById('fs-fbar'); if(fsbar2) fsbar2.style.width='0%';
   updateUI(); renderGrid();
@@ -1030,6 +1129,49 @@ function goSolved() {
   renderGrid();
 }
 
+var autoSolveTimer=null;
+var autoSolving=false;
+
+function stopAutoSolve() {
+  autoSolving=false;
+  clearTimeout(autoSolveTimer);
+  cancelSolver();
+  var btn=document.getElementById('btn-solve');
+  var stop=document.getElementById('btn-stopsolve');
+  if(btn) btn.textContent='Solve (Optimal)';
+  if(stop) stop.style.display='none';
+  schedSolver();
+}
+
+function doAutoSolve() {
+  if(mode==='timed') return;
+  if(isSolved(tiles,N)) return;
+  if(N!==4) { alert('Auto-solve only works for 4×4.'); return; }
+  stopAutoSolve();
+  var btn=document.getElementById('btn-solve');
+  var stop=document.getElementById('btn-stopsolve');
+  if(btn) btn.textContent='Solving…';
+  if(stop) stop.style.display='';
+  autoSolving=true;
+  var snap=tiles.slice();
+  runSolver(snap, N, function(path) {
+    if(btn) btn.textContent='Solve (Optimal)';
+    if(!autoSolving) return;
+    if(!path||path.length===0) { if(stop) stop.style.display='none'; return; }
+    var step=0;
+    var DR2=[-1,1,0,0], DC2=[0,0,-1,1];
+    function playNext() {
+      if(!autoSolving||step>=path.length) { if(stop) stop.style.display='none'; autoSolving=false; return; }
+      var d=path[step++];
+      var er=Math.floor(emptyIdx/N), ec=emptyIdx%N;
+      var nr=er+DR2[d], nc=ec+DC2[d];
+      doMoveIdx(nr*N+nc);
+      autoSolveTimer=setTimeout(playNext, 120);
+    }
+    playNext();
+  });
+}
+
 function resetMoves() {
   moves=0; updateUI();
 }
@@ -1054,7 +1196,6 @@ function onFirst() {
   started=true;
   if(mode==='timed') {
     startTimer();
-    setTimeout(schedSolver, 1000);
   }
   if(mode==='explore') {
     exploreTimerPaused=false;
@@ -1098,9 +1239,13 @@ function schedUpdateUI() {
   });
 }
 
+var solverDebounce=null;
 function afterMove() {
   schedUpdateUI();
-  if(mode==='free'||mode==='explore') schedSolver();
+  if(mode==='free'||mode==='explore') {
+    clearTimeout(solverDebounce);
+    solverDebounce=setTimeout(function(){ cancelSolver(); schedSolver(); }, 300);
+  }
   if(mode==='explore') checkStopAt();
 }
 
@@ -1257,14 +1402,21 @@ function fmtMs(ms) {
 var TILE_SIZES={3:108,4:92,5:78,6:65,7:56,8:50,9:44,10:39};
 var FONT_SIZES={3:30,4:26,5:22,6:18,7:16,8:14,9:12,10:11};
 
+var _tbFpct=null,_tbFbar=null,_tbFpctS=null,_tbFbarS=null,_fsFpct=null,_fsFbar=null;
 function updateProgressBar() {
   var f100=(getF()*100).toFixed(1);
-  // timed/explore bar
-  var fpct=document.getElementById('tb-fpct'); if(fpct) fpct.textContent=f100+'%';
-  var fbar=document.getElementById('tb-fbar'); if(fbar) fbar.style.width=f100+'%';
-  // freestyle bar
-  var fspct=document.getElementById('fs-fpct'); if(fspct) fspct.textContent=f100+'%';
-  var fsbar=document.getElementById('fs-fbar'); if(fsbar) fsbar.style.width=f100+'%';
+  if(!_tbFpct) _tbFpct=document.getElementById('tb-fpct');
+  if(!_tbFbar) _tbFbar=document.getElementById('tb-fbar');
+  if(!_tbFpctS) _tbFpctS=document.getElementById('tb-fpct-s');
+  if(!_tbFbarS) _tbFbarS=document.getElementById('tb-fbar-s');
+  if(!_fsFpct) _fsFpct=document.getElementById('fs-fpct');
+  if(!_fsFbar) _fsFbar=document.getElementById('fs-fbar');
+  if(_tbFpct) _tbFpct.textContent=f100+'%';
+  if(_tbFbar) _tbFbar.style.width=f100+'%';
+  if(_tbFpctS) _tbFpctS.textContent=f100+'%';
+  if(_tbFbarS) _tbFbarS.style.width=f100+'%';
+  if(_fsFpct) _fsFpct.textContent=f100+'%';
+  if(_fsFbar) _fsFbar.style.width=f100+'%';
 }
 
 function renderGrid() {
@@ -1326,16 +1478,13 @@ function initEvents() {
 
   grid.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
-  // CLICK mode — physical slide on mobile, click on desktop
-  var clickTouchStartX=0, clickTouchStartY=0, clickTouchTileIdx=-1;
-  var clickTouchAxis='';
-  var clickTouchMoved=false;
-  var lastTouchEnd=0; // timestamp to suppress ghost clicks
+  // CLICK mode — real 15-puzzle: press tile, slide toward blank, instant response
+  var isTouch=false;
+  var ctIdx=-1, ctAxis='', ctDone=false, ctMoved=false;
+  var ctStartX=0, ctStartY=0, ctDir=0;
 
   grid.addEventListener('click', function(e) {
-    if(control!=='click') return;
-    // Suppress ghost click after touch — 15ms window
-    if(Date.now()-lastTouchEnd<15) return;
+    if(control!=='click'||isTouch) return;
     var el=e.target.closest ? e.target.closest('.tile') : e.target;
     if(!el||el.classList.contains('empty')) return;
     doMoveIdx(+el.dataset.idx);
@@ -1344,50 +1493,44 @@ function initEvents() {
   grid.addEventListener('touchstart', function(e) {
     if(control!=='click'||finished) return;
     e.preventDefault();
-    clickTouchMoved=false;
+    isTouch=true; ctDone=false; ctMoved=false;
     var t=e.touches[0]; if(!t) return;
-    clickTouchStartX=t.clientX; clickTouchStartY=t.clientY;
-    var el=document.elementFromPoint(t.clientX, t.clientY);
-    if(el) el=el.closest ? el.closest('.tile') : el;
-    if(!el||!el.classList.contains('tile')||el.classList.contains('empty')){ clickTouchTileIdx=-1; clickTouchAxis=''; return; }
-    clickTouchTileIdx=+el.dataset.idx;
-    var ir=Math.floor(clickTouchTileIdx/N), ic=clickTouchTileIdx%N;
-    var er=Math.floor(emptyIdx/N),           ec=emptyIdx%N;
-    if(ir===er)      clickTouchAxis='h';
-    else if(ic===ec) clickTouchAxis='v';
-    else             clickTouchAxis='';
+    ctStartX=t.clientX; ctStartY=t.clientY;
+    // Compute tile index directly from coordinates — much faster than elementFromPoint
+    var rect=grid.getBoundingClientRect();
+    var ts=TILE_SIZES[N]||92;
+    var col=Math.floor((t.clientX-rect.left)/ts);
+    var row=Math.floor((t.clientY-rect.top)/ts);
+    if(col<0||col>=N||row<0||row>=N){ ctIdx=-1; return; }
+    var idx=row*N+col;
+    if(tiles[idx]===0){ ctIdx=-1; return; }
+    ctIdx=idx;
+    var ir=row, ic=col;
+    var er=Math.floor(emptyIdx/N), ec=emptyIdx%N;
+    if(ir===er&&ic!==ec) { ctAxis='h'; ctDir=ec<ic?-1:1; }
+    else if(ic===ec&&ir!==er) { ctAxis='v'; ctDir=er<ir?-1:1; }
+    else { ctAxis=''; ctIdx=-1; return; }
+    // Fire immediately — zero delay
+    ctDone=true; doMoveIdx(idx); ctIdx=-1;
   }, {passive:false});
 
   grid.addEventListener('touchmove', function(e) {
     e.preventDefault();
-    if(finished||control!=='click') return;
-    if(clickTouchTileIdx<0||clickTouchAxis==='') return;
+    if(control!=='click'||finished) return;
+    ctMoved=true;
+    if(ctIdx<0||ctDone) return;
     var t=e.touches[0]; if(!t) return;
-    var dx=t.clientX-clickTouchStartX, dy=t.clientY-clickTouchStartY;
-    var ir=Math.floor(clickTouchTileIdx/N), ic=clickTouchTileIdx%N;
-    var er=Math.floor(emptyIdx/N),           ec=emptyIdx%N;
-    var shouldMove=false;
-    if(clickTouchAxis==='h') {
-      if(ec<ic && dx<0) shouldMove=true;
-      if(ec>ic && dx>0) shouldMove=true;
-    } else if(clickTouchAxis==='v') {
-      if(er<ir && dy<0) shouldMove=true;
-      if(er>ir && dy>0) shouldMove=true;
-    }
-    if(shouldMove) {
-      clickTouchMoved=true;
-      doMoveIdx(clickTouchTileIdx);
-      clickTouchStartX=t.clientX; clickTouchStartY=t.clientY;
-      clickTouchTileIdx=-1; clickTouchAxis='';
-    }
+    if(ctAxis==='') return;
+    var dx=t.clientX-ctStartX, dy=t.clientY-ctStartY;
+    var ok=false;
+    if(ctAxis==='h') ok=(ctDir<0?dx<-1:dx>1);
+    else if(ctAxis==='v') ok=(ctDir<0?dy<-1:dy>1);
+    if(ok) { ctDone=true; doMoveIdx(ctIdx); ctIdx=-1; }
   }, {passive:false});
 
-  grid.addEventListener('touchend', function(e) {
-    lastTouchEnd=Date.now();
-    if(control==='click' && !clickTouchMoved && clickTouchTileIdx>=0) {
-      doMoveIdx(clickTouchTileIdx);
-    }
-    clickTouchTileIdx=-1; clickTouchAxis=''; clickTouchMoved=false;
+  grid.addEventListener('touchend', function() {
+    if(control==='click'&&!ctDone&&!ctMoved&&ctIdx>=0) doMoveIdx(ctIdx);
+    ctIdx=-1; ctDone=false; ctMoved=false;
   }, {passive:true});
 
   // DRAGSLIDE mode
@@ -1409,6 +1552,7 @@ function initEvents() {
   var lastMoveTime = 0;
 
   function showLaser(x, y) {
+    if(!laserOn) return;
     laserEl.style.left = x+'px';
     laserEl.style.top  = y+'px';
     laserEl.style.display = 'block';
@@ -1645,6 +1789,7 @@ function setMode(m) {
   document.getElementById('box-session').style.display    = isFree||isExplore ? 'none' : '';
   document.getElementById('btn-scramble').style.display   = isFree||isExplore ? '' : 'none';
   document.getElementById('btn-solved').style.display     = isFree||isExplore ? '' : 'none';
+  document.getElementById('btn-solve').style.display      = (isFree||isExplore) ? '' : 'none';
   document.getElementById('btn-resetmoves').style.display = isFree||isExplore ? '' : 'none';
   document.getElementById('btn-toggletimer').style.display= isExplore ? '' : 'none';
   document.getElementById('btn-resettimer').style.display = isExplore ? '' : 'none';
@@ -1664,9 +1809,20 @@ function setControl(c) {
   document.getElementById('tog-hover').classList.toggle('active', c==='hover');
   var grid=document.getElementById('grid');
   grid.classList.toggle('hover-mode', c==='hover');
-  grid.classList.toggle('laser-mode', c==='drag'||c==='hover');
+  grid.classList.toggle('laser-mode', laserOn&&(c==='drag'||c==='hover'));
   pHeld=false; pLastIdx=-1; clearHL();
   var laserEl=document.getElementById('laser'); if(laserEl) laserEl.style.display='none';
+  save();
+}
+
+var laserOn=false;
+function setLaser(on) {
+  laserOn=on;
+  document.getElementById('tog-laser-on').classList.toggle('active', on);
+  document.getElementById('tog-laser-off').classList.toggle('active', !on);
+  var grid=document.getElementById('grid');
+  grid.classList.toggle('laser-mode', on&&(control==='drag'||control==='hover'));
+  var laserEl=document.getElementById('laser'); if(laserEl&&!on) laserEl.style.display='none';
   save();
 }
 
@@ -1737,7 +1893,9 @@ document.getElementById('size-val').textContent=N+' × '+N;
 ['tog-click','tog-drag','tog-hover'].forEach(function(id){
   document.getElementById(id).classList.toggle('active', control===id.replace('tog-',''));
 });
-(function(){ var g=document.getElementById('grid'); g.classList.toggle('laser-mode', control==='drag'||control==='hover'); })();
+(function(){ var g=document.getElementById('grid'); g.classList.toggle('laser-mode', laserOn&&(control==='drag'||control==='hover')); })();
+document.getElementById('tog-laser-on').classList.toggle('active', laserOn);
+document.getElementById('tog-laser-off').classList.toggle('active', !laserOn);
 
 initEvents();
 setMode(mode);
