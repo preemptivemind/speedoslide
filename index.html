@@ -637,125 +637,27 @@ var solverTimer = null;
 var DR=[-1,1,0,0], DC=[0,0,-1,1], OPP=[1,0,3,2];
 
 // ════════════════════════════════════════════════════════════
-//  HEURISTIC: Manhattan Distance + Linear Conflict (rows + cols)
-//  + corner/last-tile corrections for tighter lower bound
+//  HEURISTIC — Manhattan distance + linear conflict (rows + cols)
+//  This is the original formula from the first version
 // ════════════════════════════════════════════════════════════
-function hFull(t, n, gp) {
-  var s=0, size=n*n, i, v, g, r, c, r2, v1, v2, g1, g2;
+function mdLC(t, n, gp) {
+  var s=0, size=n*n, i, v, g, r, c, c2, v1, v2, g1, g2;
   // Manhattan distance
   for(i=0;i<size;i++){ v=t[i]; if(!v) continue; g=gp[v]; s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n); }
   // Linear conflict — rows
   for(r=0;r<n;r++) for(c=0;c<n-1;c++) {
     v1=t[r*n+c]; if(!v1) continue; g1=gp[v1]; if(Math.floor(g1/n)!==r) continue;
-    for(var c2=c+1;c2<n;c2++){ v2=t[r*n+c2]; if(!v2) continue; g2=gp[v2]; if(Math.floor(g2/n)!==r) continue; if(g1>g2) s+=2; }
+    for(c2=c+1;c2<n;c2++) { v2=t[r*n+c2]; if(!v2) continue; g2=gp[v2]; if(Math.floor(g2/n)!==r) continue; if(g1>g2) s+=2; }
   }
-  // Linear conflict — columns
+  // Linear conflict — cols
   for(c=0;c<n;c++) for(r=0;r<n-1;r++) {
     v1=t[r*n+c]; if(!v1) continue; g1=gp[v1]; if(g1%n!==c) continue;
-    for(r2=r+1;r2<n;r2++){ v2=t[r2*n+c]; if(!v2) continue; g2=gp[v2]; if(g2%n!==c) continue; if(g1>g2) s+=2; }
+    for(var r2=r+1;r2<n;r2++) { v2=t[r2*n+c]; if(!v2) continue; g2=gp[v2]; if(g2%n!==c) continue; if(g1>g2) s+=2; }
   }
-  // Corner correction: if a corner tile is wrong and its two neighbours are wrong, add 2
-  // Top-left corner: tile 1, neighbours: tile 2 (right) and tile n+1 (below)
-  var corners=[
-    [0,       1,       1,       n],       // TL: pos, tile, right-tile, below-tile
-    [n-1,     n,       n-1,     2*n-1],   // TR
-    [(n-1)*n, n*(n-1)+1, (n-2)*n, (n-1)*n+1], // BL
-    [n*n-1,   n*n-1,  (n-1)*n-1, n*n-2]  // BR (blank goal)
-  ];
-  // TL: goal of tile 1 = pos 0, goal of tile 2 = pos 1, goal of tile n+1 = pos n
-  if(t[0]!==1 && t[1]!==2 && t[n]!==n+1 && gp[1]===0) s+=2;
-  // TR: goal of tile n = pos n-1
-  if(t[n-1]!==n && t[n-2]!==n-1 && t[2*n-1]!==2*n && gp[n]===n-1) s+=2;
   return s;
 }
 
-// Incremental Manhattan Distance: when blank swaps with tile v (v was at ni, goes to ei),
-// compute the delta in MD. Tile v's old pos was ni, new pos is ei.
-// deltaMD = |newRow-goalRow| + |newCol-goalCol| - |oldRow-goalRow| - |oldCol-goalCol|
-// We use MD only (no LC) inside the search for speed; LC is used only for initial bound.
-
-function mdOnly(t, n, gp) {
-  var s=0, size=n*n, i, v, g;
-  for(i=0;i<size;i++){ v=t[i]; if(!v) continue; g=gp[v]; s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n); }
-  return s;
-}
-
-function makeStack(snap, n, gp) {
-  var ei=snap.indexOf(0);
-  var h0=mdOnly(snap,n,gp);
-  return [{state:snap.slice(), g:0, last:-1, ei:ei, di:0, min:h0, h:h0}];
-}
-
-function runSlice(stack, bound, n, gp, deadline, savePath) {
-  // Hoisted locals for speed
-  var _DR=DR, _DC=DC, _OPP=OPP;
-  var checkDL = 0;
-  while(stack.length) {
-    // Only check deadline every 1024 iterations to reduce overhead
-    if((checkDL++ & 1023)===0 && Date.now()>=deadline) return 'yield';
-    var f=stack[stack.length-1];
-    if(f.g+f.h > bound) {
-      var mn=f.g+f.h;
-      stack.pop();
-      if(stack.length) { var p=stack[stack.length-1]; if(mn<p.min) p.min=mn; }
-      else return mn;
-      continue;
-    }
-    if(f.h===0) return 'found';
-
-    var moved=false;
-    var er=Math.floor(f.ei/n), ec=f.ei%n;
-    while(f.di<4) {
-      var d=f.di++;
-      if(f.last>=0&&d===_OPP[f.last]) continue;
-      var nr=er+_DR[d], nc=ec+_DC[d];
-      if(nr<0||nr>=n||nc<0||nc>=n) continue;
-      var ni=nr*n+nc;
-      // Tile at ni moves to ei (blank's old pos). Compute MD delta incrementally.
-      var v=f.state[ni];
-      var g=gp[v];
-      var gr=Math.floor(g/n), gc=g%n;
-      // Old MD contribution: tile v at ni
-      var oldMD=Math.abs(nr-gr)+Math.abs(nc-gc);
-      // New MD contribution: tile v at ei (old blank)
-      var newMD=Math.abs(er-gr)+Math.abs(ec-gc);
-      var nh=f.h+newMD-oldMD;
-      var nf=f.g+1+nh;
-      if(nf<=bound) {
-        // Apply move to state (in place, will be undone on pop)
-        f.state[f.ei]=v;
-        f.state[ni]=0;
-        stack.push({state:f.state, g:f.g+1, last:d, ei:ni, di:0, min:nf, h:nh});
-        moved=true; break;
-      } else {
-        if(nf<f.min) f.min=nf;
-      }
-    }
-    if(!moved) {
-      var mn2=f.min;
-      var popped=stack.pop();
-      // Undo move: swap blank back
-      if(stack.length) {
-        var parent=stack[stack.length-1];
-        // Restore: tile that was at parent.ei (now 0) came from popped.ei
-        var tileBack=popped.state[parent.ei];
-        popped.state[parent.ei]=0;
-        popped.state[popped.ei]=tileBack;
-        if(mn2<parent.min) parent.min=mn2;
-      }
-      else return mn2;
-    }
-  }
-  return stack.length===0 ? Infinity : 'yield';
-}
-
-// Extract solution path from stack
-function extractPath(stack) {
-  var moves=[];
-  for(var i=1;i<stack.length;i++) moves.push(stack[i].last);
-  return moves;
-}
-
+// Recursive IDA* — each depth runs to completion, yields between depths
 function runSolver(snap, n, onFound) {
   solverToken++;
   var token=solverToken;
@@ -763,33 +665,58 @@ function runSolver(snap, n, onFound) {
   setOptDisp('…','');
   var gp=[], size=n*n;
   for(var i=0;i<size-1;i++) gp[i+1]=i; gp[0]=size-1;
-  var h0=hFull(snap,n,gp);
+  var h0=mdLC(snap,n,gp);
   if(h0===0){ currentOptimal=0; setOptDisp('0','exact'); if(onFound) onFound([]); return; }
-  // For >4x4, IDA* can be slow — show the heuristic lower bound, don't attempt full search
-  if(n>4){ setOptDisp('≥'+h0,'approx'); return; }
-  // Start IDA* from h0 (tighter MD+LC+corner bound)
   var bound=h0;
   setOptDisp('≥'+bound,'approx');
-  var stack=makeStack(snap,n,gp);
+  var state=snap.slice();
+  var solvedPath=null;
+  var _DR=DR, _DC=DC, _OPP=OPP;
+
+  function search(g, last, ei, path) {
+    var hv=mdLC(state,n,gp);
+    var f=g+hv;
+    if(f>bound) return f;
+    if(hv===0) { solvedPath=path.slice(); return -1; }
+    var min=Infinity;
+    var er=Math.floor(ei/n), ec=ei%n;
+    for(var d=0;d<4;d++) {
+      if(d===_OPP[last]) continue;
+      var nr=er+_DR[d], nc=ec+_DC[d];
+      if(nr<0||nr>=n||nc<0||nc>=n) continue;
+      var ni=nr*n+nc;
+      var v=state[ni];
+      state[ei]=v; state[ni]=0;
+      path.push(d);
+      var t=search(g+1, d, ni, path);
+      path.pop();
+      state[ni]=v; state[ei]=0;
+      if(t===-1) return -1;
+      if(t<min) min=t;
+    }
+    return min;
+  }
 
   function step() {
     if(solverToken!==token) return;
-    var r=runSlice(stack,bound,n,gp,Date.now()+12,false);
+    // Reset state and run one full depth
+    for(var j=0;j<snap.length;j++) state[j]=snap[j];
+    var ei=state.indexOf(0);
+    var t=search(0, -1, ei, []);
     if(solverToken!==token) return;
-    if(r==='found') {
+    if(t===-1) {
       currentOptimal=bound; setOptDisp(String(bound),'exact');
-      if(onFound) onFound(extractPath(stack));
-    } else if(r==='yield') {
-      solverTimer=setTimeout(step,0);
-    } else if(typeof r==='number' && r>bound && r<999) {
-      bound=r;
+      if(onFound) onFound(solvedPath);
+    } else if(typeof t==='number' && t>bound) {
+      bound=t;
       setOptDisp('≥'+bound,'approx');
-      stack=makeStack(snap,n,gp);
       solverTimer=setTimeout(step,0);
     }
+    // else exhausted (shouldn't happen for solvable puzzle)
   }
   solverTimer=setTimeout(step,0);
 }
+
 function cancelSolver() { solverToken++; clearTimeout(solverTimer); }
 function set4x(id, val, cls) {
   var a=document.getElementById(id), b=document.getElementById(id+'-4');
@@ -1478,13 +1405,14 @@ function initEvents() {
 
   grid.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
-  // CLICK mode — real 15-puzzle: press tile, slide toward blank, instant response
+  // SLIDE mode — each finger fires independently on touchstart
+  // Ghost clicks suppressed by preventDefault + isTouch flag
   var isTouch=false;
-  var ctIdx=-1, ctAxis='', ctDone=false, ctMoved=false;
-  var ctStartX=0, ctStartY=0, ctDir=0;
+  var lastTouchFire=0; // suppress any click that fires within 500ms of a touch move
 
   grid.addEventListener('click', function(e) {
-    if(control!=='click'||isTouch) return;
+    if(control!=='click') return;
+    if(isTouch) return; // touch device — all moves handled by touchstart
     var el=e.target.closest ? e.target.closest('.tile') : e.target;
     if(!el||el.classList.contains('empty')) return;
     doMoveIdx(+el.dataset.idx);
@@ -1492,46 +1420,32 @@ function initEvents() {
 
   grid.addEventListener('touchstart', function(e) {
     if(control!=='click'||finished) return;
-    e.preventDefault();
-    isTouch=true; ctDone=false; ctMoved=false;
-    var t=e.touches[0]; if(!t) return;
-    ctStartX=t.clientX; ctStartY=t.clientY;
-    // Compute tile index directly from coordinates — much faster than elementFromPoint
+    e.preventDefault(); // blocks ghost click
+    isTouch=true;
     var rect=grid.getBoundingClientRect();
     var ts=TILE_SIZES[N]||92;
-    var col=Math.floor((t.clientX-rect.left)/ts);
-    var row=Math.floor((t.clientY-rect.top)/ts);
-    if(col<0||col>=N||row<0||row>=N){ ctIdx=-1; return; }
-    var idx=row*N+col;
-    if(tiles[idx]===0){ ctIdx=-1; return; }
-    ctIdx=idx;
-    var ir=row, ic=col;
-    var er=Math.floor(emptyIdx/N), ec=emptyIdx%N;
-    if(ir===er&&ic!==ec) { ctAxis='h'; ctDir=ec<ic?-1:1; }
-    else if(ic===ec&&ir!==er) { ctAxis='v'; ctDir=er<ir?-1:1; }
-    else { ctAxis=''; ctIdx=-1; return; }
-    // Fire immediately — zero delay
-    ctDone=true; doMoveIdx(idx); ctIdx=-1;
+    // Process every changed touch — allows multi-finger rapid sliding
+    var changed=e.changedTouches;
+    for(var i=0;i<changed.length;i++) {
+      var t=changed[i];
+      var col=Math.floor((t.clientX-rect.left)/ts);
+      var row=Math.floor((t.clientY-rect.top)/ts);
+      if(col<0||col>=N||row<0||row>=N) continue;
+      var idx=row*N+col;
+      if(tiles[idx]===0) continue;
+      var er=Math.floor(emptyIdx/N), ec=emptyIdx%N;
+      if(row!==er&&col!==ec) continue; // not in same row or col as blank
+      doMoveIdx(idx);
+    }
   }, {passive:false});
 
   grid.addEventListener('touchmove', function(e) {
     e.preventDefault();
-    if(control!=='click'||finished) return;
-    ctMoved=true;
-    if(ctIdx<0||ctDone) return;
-    var t=e.touches[0]; if(!t) return;
-    if(ctAxis==='') return;
-    var dx=t.clientX-ctStartX, dy=t.clientY-ctStartY;
-    var ok=false;
-    if(ctAxis==='h') ok=(ctDir<0?dx<-1:dx>1);
-    else if(ctAxis==='v') ok=(ctDir<0?dy<-1:dy>1);
-    if(ok) { ctDone=true; doMoveIdx(ctIdx); ctIdx=-1; }
   }, {passive:false});
 
-  grid.addEventListener('touchend', function() {
-    if(control==='click'&&!ctDone&&!ctMoved&&ctIdx>=0) doMoveIdx(ctIdx);
-    ctIdx=-1; ctDone=false; ctMoved=false;
-  }, {passive:true});
+  grid.addEventListener('touchend', function(e) {
+    e.preventDefault(); // extra ghost click block
+  }, {passive:false});
 
   // DRAGSLIDE mode
   grid.addEventListener('pointerdown', function(e) {
