@@ -657,7 +657,7 @@ function mdLC(t, n, gp) {
   return s;
 }
 
-// Recursive IDA* — each depth runs to completion, yields between depths
+// Recursive IDA* — yields every 50k nodes to keep UI responsive
 function runSolver(snap, n, onFound) {
   solverToken++;
   var token=solverToken;
@@ -672,8 +672,11 @@ function runSolver(snap, n, onFound) {
   var state=snap.slice();
   var solvedPath=null;
   var _DR=DR, _DC=DC, _OPP=OPP;
+  var nodes=0, yielded=false;
 
   function search(g, last, ei, path) {
+    if(yielded) return Infinity;
+    if(++nodes>=50000){ yielded=true; return Infinity; }
     var hv=mdLC(state,n,gp);
     var f=g+hv;
     if(f>bound) return f;
@@ -693,13 +696,14 @@ function runSolver(snap, n, onFound) {
       state[ni]=v; state[ei]=0;
       if(t===-1) return -1;
       if(t<min) min=t;
+      if(yielded) return min;
     }
     return min;
   }
 
   function step() {
     if(solverToken!==token) return;
-    // Reset state and run one full depth
+    nodes=0; yielded=false;
     for(var j=0;j<snap.length;j++) state[j]=snap[j];
     var ei=state.indexOf(0);
     var t=search(0, -1, ei, []);
@@ -707,12 +711,13 @@ function runSolver(snap, n, onFound) {
     if(t===-1) {
       currentOptimal=bound; setOptDisp(String(bound),'exact');
       if(onFound) onFound(solvedPath);
+    } else if(yielded) {
+      solverTimer=setTimeout(step,0); // resume same bound
     } else if(typeof t==='number' && t>bound) {
       bound=t;
       setOptDisp('≥'+bound,'approx');
       solverTimer=setTimeout(step,0);
     }
-    // else exhausted (shouldn't happen for solvable puzzle)
   }
   solverTimer=setTimeout(step,0);
 }
@@ -725,11 +730,12 @@ function set4x(id, val, cls) {
 }
 function updateTimerBars() {
   var is4 = (N===4&&(mode==='timed'||mode==='explore'));
+  var isFree = mode==='free';
   var s=document.getElementById('timer-bar-single'), f=document.getElementById('timer-bar-4x4');
-  if(s) s.style.display = is4 ? 'none' : '';
+  if(s) s.style.display = (isFree||is4) ? 'none' : '';
   if(f) f.style.display = is4 ? '' : 'none';
   var ps=document.getElementById('tb-progress-single');
-  if(ps) ps.style.display = (!is4&&(mode==='timed'||mode==='explore')) ? '' : 'none';
+  if(ps) ps.style.display = (!isFree&&!is4&&(mode==='timed'||mode==='explore')) ? '' : 'none';
 }
 function setOptDisp(text,state) {
   var col=state==='exact'?'green':state==='approx'?'orange':'';
