@@ -259,7 +259,7 @@ input[type=range] {
       <div class="box-body">
         <div class="stat-row"><span class="stat-name">Timer</span>  <span class="stat-val accent" id="l-time">—</span></div>
         <div class="stat-row"><span class="stat-name">Moves</span>  <span class="stat-val"        id="l-moves">0</span></div>
-        <div class="stat-row"><span class="stat-name">Optimal</span><span class="stat-val orange" id="l-opt">…</span></div>
+        <div class="stat-row" id="row-opt"><span class="stat-name">Optimal</span><span class="stat-val orange" id="l-opt">…</span></div>
         <div class="stat-row"><span class="stat-name">Solves</span> <span class="stat-val"        id="l-solves">0</span></div>
       </div>
     </div>
@@ -286,8 +286,7 @@ input[type=range] {
         <button class="btn primary" onclick="newGame()">New Game</button>
         <button class="btn" id="btn-scramble" style="display:none" onclick="doScramble()">Random Scramble</button>
         <button class="btn" id="btn-solved" style="display:none" onclick="goSolved()">Solved Position</button>
-        <button class="btn" id="btn-solve" style="display:none" onclick="doAutoSolve()">Solve (Optimal)</button>
-        <button class="btn danger" id="btn-stopsolve" style="display:none" onclick="stopAutoSolve()">Stop Solving</button>
+
         <button class="btn" id="btn-resetmoves" style="display:none" onclick="resetMoves()">Reset Movecount</button>
         <button class="btn" id="btn-toggletimer" style="display:none" onclick="toggleExploreTimer()">Stop Timer</button>
         <button class="btn" id="btn-resettimer" style="display:none" onclick="resetExploreTimer()">Reset Timer</button>
@@ -342,7 +341,7 @@ input[type=range] {
         <div class="timer-box" id="tb-time-box"><div class="t-label" id="tb-lbl">Time</div><div class="t-val running" id="tb-time">0:00.000</div></div>
         <div class="timer-box"><div class="t-label">Moves</div><div class="t-val" id="tb-moves">0</div></div>
         <div class="timer-box" id="tb-tps-box"><div class="t-label">TPS</div><div class="t-val" id="tb-tps">0.0</div></div>
-        <div class="timer-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt">…</div></div>
+        <div class="timer-box" id="tb-opt-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt">…</div></div>
       </div>
       <div id="tb-progress-single" style="display:none;background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:6px 10px;margin-top:4px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -363,7 +362,7 @@ input[type=range] {
         <div class="timer-box"><div class="t-label">TPS</div><div class="t-val" id="tb-tps-4">0.0</div></div>
       </div>
       <div class="timer-bar" style="margin-bottom:4px">
-        <div class="timer-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt-4">…</div></div>
+        <div class="timer-box" id="tb-opt-4-box"><div class="t-label">Optimal</div><div class="t-val opt" id="tb-opt-4">…</div></div>
         <div class="timer-box"><div class="t-label">T%</div><div class="t-val" id="tb-tpct" style="font-size:18px;color:#1565c0">—</div></div>
         <div class="timer-box"><div class="t-label">M%</div><div class="t-val" id="tb-mpct" style="font-size:18px;color:#2e7d32">—</div></div>
       </div>
@@ -533,8 +532,6 @@ var bestMovesVal = null;
 
 // solver
 var currentOptimal = null;
-var solverToken    = 0;
-var solverTimer    = null;
 
 // pointer state
 var pHeld    = false;   // pointer currently pressed (drag mode)
@@ -630,99 +627,67 @@ function clearAll() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  IDA* SOLVER — time-sliced, incremental heuristic
+//  IDA* SOLVER — recursive, time-sliced via setTimeout
 // ════════════════════════════════════════════════════════════
-var solverToken = 0;
-var solverTimer = null;
 var DR=[-1,1,0,0], DC=[0,0,-1,1], OPP=[1,0,3,2];
 
-// ════════════════════════════════════════════════════════════
-//  HEURISTIC — Manhattan distance + linear conflict (rows + cols)
-//  This is the original formula from the first version
-// ════════════════════════════════════════════════════════════
 function mdLC(t, n, gp) {
-  var s=0, size=n*n, i, v, g, r, c, c2, v1, v2, g1, g2;
-  // Manhattan distance
-  for(i=0;i<size;i++){ v=t[i]; if(!v) continue; g=gp[v]; s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n); }
-  // Linear conflict — rows
-  for(r=0;r<n;r++) for(c=0;c<n-1;c++) {
-    v1=t[r*n+c]; if(!v1) continue; g1=gp[v1]; if(Math.floor(g1/n)!==r) continue;
-    for(c2=c+1;c2<n;c2++) { v2=t[r*n+c2]; if(!v2) continue; g2=gp[v2]; if(Math.floor(g2/n)!==r) continue; if(g1>g2) s+=2; }
-  }
-  // Linear conflict — cols
-  for(c=0;c<n;c++) for(r=0;r<n-1;r++) {
-    v1=t[r*n+c]; if(!v1) continue; g1=gp[v1]; if(g1%n!==c) continue;
-    for(var r2=r+1;r2<n;r2++) { v2=t[r2*n+c]; if(!v2) continue; g2=gp[v2]; if(g2%n!==c) continue; if(g1>g2) s+=2; }
-  }
+  var s=0,size=n*n,i,v,g,r,c,c2,v1,v2,g1,g2;
+  for(i=0;i<size;i++){v=t[i];if(!v)continue;g=gp[v];s+=Math.abs(Math.floor(i/n)-Math.floor(g/n))+Math.abs(i%n-g%n);}
+  for(r=0;r<n;r++)for(c=0;c<n-1;c++){v1=t[r*n+c];if(!v1)continue;g1=gp[v1];if(Math.floor(g1/n)!==r)continue;for(c2=c+1;c2<n;c2++){v2=t[r*n+c2];if(!v2)continue;g2=gp[v2];if(Math.floor(g2/n)!==r)continue;if(g1>g2)s+=2;}}
+  for(c=0;c<n;c++)for(r=0;r<n-1;r++){v1=t[r*n+c];if(!v1)continue;g1=gp[v1];if(g1%n!==c)continue;for(var r2=r+1;r2<n;r2++){v2=t[r2*n+c];if(!v2)continue;g2=gp[v2];if(g2%n!==c)continue;if(g1>g2)s+=2;}}
   return s;
 }
 
-// Recursive IDA* — yields every 50k nodes to keep UI responsive
-function runSolver(snap, n, onFound) {
-  solverToken++;
-  var token=solverToken;
-  currentOptimal=null;
-  setOptDisp('…','');
-  var gp=[], size=n*n;
-  for(var i=0;i<size-1;i++) gp[i+1]=i; gp[0]=size-1;
+var _solverToken=0, _solverTimer=null;
+
+function cancelSolver(){_solverToken++;clearTimeout(_solverTimer);}
+
+function runSolver(snap,n,onFound){
+  cancelSolver();
+  var token=++_solverToken;
+  currentOptimal=null; setOptDisp('…','');
+  var gp=[],size=n*n;
+  for(var i=0;i<size-1;i++)gp[i+1]=i; gp[0]=size-1;
   var h0=mdLC(snap,n,gp);
-  if(h0===0){ currentOptimal=0; setOptDisp('0','exact'); if(onFound) onFound([]); return; }
+  if(h0===0){currentOptimal=0;setOptDisp('0','exact');if(onFound)onFound([]);return;}
   var bound=h0;
   setOptDisp('≥'+bound,'approx');
-  var state=snap.slice();
-  var solvedPath=null;
-  var _DR=DR, _DC=DC, _OPP=OPP;
-  var nodes=0, yielded=false;
-
-  function search(g, last, ei, path) {
-    if(yielded) return Infinity;
-    if(++nodes>=50000){ yielded=true; return Infinity; }
-    var hv=mdLC(state,n,gp);
-    var f=g+hv;
-    if(f>bound) return f;
-    if(hv===0) { solvedPath=path.slice(); return -1; }
-    var min=Infinity;
-    var er=Math.floor(ei/n), ec=ei%n;
-    for(var d=0;d<4;d++) {
-      if(d===_OPP[last]) continue;
-      var nr=er+_DR[d], nc=ec+_DC[d];
-      if(nr<0||nr>=n||nc<0||nc>=n) continue;
-      var ni=nr*n+nc;
-      var v=state[ni];
-      state[ei]=v; state[ni]=0;
-      path.push(d);
-      var t=search(g+1, d, ni, path);
-      path.pop();
-      state[ni]=v; state[ei]=0;
-      if(t===-1) return -1;
-      if(t<min) min=t;
-      if(yielded) return min;
+  var state=snap.slice(), solvedPath=null;
+  var nodes=0, LIMIT=30000, interrupted=false;
+  function search(g,last,ei,path){
+    if(interrupted)return Infinity;
+    if(++nodes>LIMIT){interrupted=true;return Infinity;}
+    var hv=mdLC(state,n,gp),f=g+hv;
+    if(f>bound)return f;
+    if(hv===0){solvedPath=path.slice();return -1;}
+    var min=Infinity,er=Math.floor(ei/n),ec=ei%n;
+    for(var d=0;d<4;d++){
+      if(d===OPP[last])continue;
+      var nr=er+DR[d],nc=ec+DC[d];
+      if(nr<0||nr>=n||nc<0||nc>=n)continue;
+      var ni=nr*n+nc,v=state[ni];
+      state[ei]=v;state[ni]=0;path.push(d);
+      var t=search(g+1,d,ni,path);
+      path.pop();state[ni]=v;state[ei]=0;
+      if(t===-1)return -1;
+      if(t<min)min=t;
+      if(interrupted)return min;
     }
     return min;
   }
-
-  function step() {
-    if(solverToken!==token) return;
-    nodes=0; yielded=false;
-    for(var j=0;j<snap.length;j++) state[j]=snap[j];
-    var ei=state.indexOf(0);
-    var t=search(0, -1, ei, []);
-    if(solverToken!==token) return;
-    if(t===-1) {
-      currentOptimal=bound; setOptDisp(String(bound),'exact');
-      if(onFound) onFound(solvedPath);
-    } else if(yielded) {
-      solverTimer=setTimeout(step,0); // resume same bound
-    } else if(typeof t==='number' && t>bound) {
-      bound=t;
-      setOptDisp('≥'+bound,'approx');
-      solverTimer=setTimeout(step,0);
-    }
+  function step(){
+    if(_solverToken!==token)return;
+    nodes=0;interrupted=false;
+    for(var j=0;j<snap.length;j++)state[j]=snap[j];
+    var t=search(0,-1,state.indexOf(0),[]);
+    if(_solverToken!==token)return;
+    if(t===-1){currentOptimal=bound;setOptDisp(String(bound),'exact');if(onFound)onFound(solvedPath);}
+    else if(interrupted){_solverTimer=setTimeout(step,0);}
+    else if(typeof t==='number'&&t>bound){bound=t;setOptDisp('≥'+bound,'approx');_solverTimer=setTimeout(step,0);}
   }
-  solverTimer=setTimeout(step,0);
+  _solverTimer=setTimeout(step,0);
 }
-
-function cancelSolver() { solverToken++; clearTimeout(solverTimer); }
 function set4x(id, val, cls) {
   var a=document.getElementById(id), b=document.getElementById(id+'-4');
   if(a){ a.textContent=val; if(cls!==undefined) a.className=cls; }
@@ -748,8 +713,9 @@ var schedDeb=null;
 var scrambleSnap = []; // snapshot of tiles at scramble time — solver always runs on this
 
 function schedSolver() {
+  if(mode==='timed') return;
   clearTimeout(schedDeb);
-  var snap = (mode==='timed') ? scrambleSnap.slice() : tiles.slice();
+  var snap = tiles.slice();
   schedDeb=setTimeout(function(){ runSolver(snap, N); }, 0);
 }
 
@@ -933,7 +899,6 @@ function slideToward(idx) {
 //  GAME FLOW
 // ════════════════════════════════════════════════════════════
 function newGame() {
-  stopAutoSolve();
   cancelSolver(); stopTimer();
   finished=false; started=false; moves=0; timerMs=0;
   currentOptimal=null; setOptDisp('…','');
@@ -954,7 +919,7 @@ function newGame() {
   var fspct2=document.getElementById('fs-fpct'); if(fspct2) fspct2.textContent='0.0%';
   var fsbar2=document.getElementById('fs-fbar'); if(fsbar2) fsbar2.style.width='0%';
   updateUI(); renderGrid();
-  schedSolver();
+  if(mode!=='timed') schedSolver();
 }
 
 var exploreTimerPaused = false;
@@ -1062,48 +1027,6 @@ function goSolved() {
   renderGrid();
 }
 
-var autoSolveTimer=null;
-var autoSolving=false;
-
-function stopAutoSolve() {
-  autoSolving=false;
-  clearTimeout(autoSolveTimer);
-  cancelSolver();
-  var btn=document.getElementById('btn-solve');
-  var stop=document.getElementById('btn-stopsolve');
-  if(btn) btn.textContent='Solve (Optimal)';
-  if(stop) stop.style.display='none';
-  schedSolver();
-}
-
-function doAutoSolve() {
-  if(mode==='timed') return;
-  if(isSolved(tiles,N)) return;
-  if(N!==4) { alert('Auto-solve only works for 4×4.'); return; }
-  stopAutoSolve();
-  var btn=document.getElementById('btn-solve');
-  var stop=document.getElementById('btn-stopsolve');
-  if(btn) btn.textContent='Solving…';
-  if(stop) stop.style.display='';
-  autoSolving=true;
-  var snap=tiles.slice();
-  runSolver(snap, N, function(path) {
-    if(btn) btn.textContent='Solve (Optimal)';
-    if(!autoSolving) return;
-    if(!path||path.length===0) { if(stop) stop.style.display='none'; return; }
-    var step=0;
-    var DR2=[-1,1,0,0], DC2=[0,0,-1,1];
-    function playNext() {
-      if(!autoSolving||step>=path.length) { if(stop) stop.style.display='none'; autoSolving=false; return; }
-      var d=path[step++];
-      var er=Math.floor(emptyIdx/N), ec=emptyIdx%N;
-      var nr=er+DR2[d], nc=ec+DC2[d];
-      doMoveIdx(nr*N+nc);
-      autoSolveTimer=setTimeout(playNext, 120);
-    }
-    playNext();
-  });
-}
 
 function resetMoves() {
   moves=0; updateUI();
@@ -1709,7 +1632,6 @@ function setMode(m) {
   document.getElementById('box-session').style.display    = isFree||isExplore ? 'none' : '';
   document.getElementById('btn-scramble').style.display   = isFree||isExplore ? '' : 'none';
   document.getElementById('btn-solved').style.display     = isFree||isExplore ? '' : 'none';
-  document.getElementById('btn-solve').style.display      = (isFree||isExplore) ? '' : 'none';
   document.getElementById('btn-resetmoves').style.display = isFree||isExplore ? '' : 'none';
   document.getElementById('btn-toggletimer').style.display= isExplore ? '' : 'none';
   document.getElementById('btn-resettimer').style.display = isExplore ? '' : 'none';
@@ -1717,6 +1639,9 @@ function setMode(m) {
   document.getElementById('fs-progress').style.display    = isFree ? '' : 'none';
   document.getElementById('scramble-section').style.display = isTimed ? 'none' : '';
   document.getElementById('stopatbox').style.display        = isExplore ? '' : 'none';
+  document.getElementById('row-opt').style.display     = isTimed ? 'none' : '';
+  document.getElementById('tb-opt-box').style.display   = isTimed ? 'none' : '';
+  var tb4box=document.getElementById('tb-opt-4-box'); if(tb4box) tb4box.style.display = isTimed ? 'none' : '';
   document.getElementById('tb-lbl').textContent = 'Time';
   updateTimerBars();
   newGame(); renderLog(); renderSession(); renderBest();
