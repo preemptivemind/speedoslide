@@ -312,7 +312,7 @@ input[type=range] {
       <div class="box-body">
         <div class="scramble-hint" id="cs-hint">Enter numbers 0–15 separated by spaces. 0 = blank.</div>
         <div class="scramble-input-wrap">
-          <input type="text" class="scramble-input" id="cs-input" placeholder="1 2 3 … 0" oninput="onCustomInput()">
+          <input type="text" inputmode="numeric" pattern="[0-9 ]*" class="scramble-input" id="cs-input" placeholder="1 2 3 … 0" oninput="onCustomInput()">
         </div>
         <div id="cs-badge" class="solvability-badge empty">—</div>
         <button class="btn primary" id="cs-apply" onclick="applyCustom()" style="margin-top:5px;display:none">Apply</button>
@@ -324,7 +324,7 @@ input[type=range] {
       <div class="box-body">
         <div class="scramble-hint">Enter target position. Use X for wildcard. Timer stops when board matches.</div>
         <div class="scramble-input-wrap" style="margin-top:5px">
-          <input type="text" class="scramble-input" id="sa-input" placeholder="1 2 3 … 0" oninput="onStopAtInput()">
+          <input type="text" inputmode="numeric" pattern="[0-9 Xx]*" class="scramble-input" id="sa-input" placeholder="1 2 3 … 0" oninput="onStopAtInput()">
         </div>
         <div id="sa-badge" class="solvability-badge empty">—</div>
         <button class="btn primary" onclick="setSolvedStopAt()" style="margin-top:5px">Solved State</button>
