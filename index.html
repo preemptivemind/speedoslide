@@ -1757,7 +1757,11 @@ function onSizeChange(v) {
 //  KEYBOARD
 // ════════════════════════════════════════════════════════════
 document.addEventListener('keydown', function(e) {
-  if(e.key===' ') { e.preventDefault(); if(mode==='free') doScramble(); else newGame(); return; }
+  if(e.key===' ') {
+    var tag=document.activeElement&&document.activeElement.tagName;
+    if(tag==='INPUT'||tag==='TEXTAREA') return;
+    e.preventDefault(); if(mode==='free') doScramble(); else newGame(); return;
+  }
   if(finished) return;
   var e0=ei(), er=Math.floor(e0/N), ec=e0%N, t=-1;
   if(e.key==='ArrowUp'   &&er<N-1) t=e0+N;
