@@ -714,8 +714,13 @@ function updateTimerBars() {
   var is4 = (N===4&&(mode==='timed'||mode==='explore'));
   var isFree = mode==='free';
   var s=document.getElementById('timer-bar-single'), f=document.getElementById('timer-bar-4x4');
-  if(s) s.style.display = (isFree||is4) ? 'none' : '';
+  if(s) s.style.display = is4 ? 'none' : '';
   if(f) f.style.display = is4 ? '' : 'none';
+  // In freestyle: hide time and TPS boxes, show moves and optimal only
+  var timeBox=document.getElementById('tb-time-box');
+  var tpsBox=document.getElementById('tb-tps-box');
+  if(timeBox) timeBox.style.display = isFree ? 'none' : '';
+  if(tpsBox)  tpsBox.style.display  = isFree ? 'none' : '';
   var ps=document.getElementById('tb-progress-single');
   if(ps) ps.style.display = (!isFree&&!is4&&(mode==='timed'||mode==='explore')) ? '' : 'none';
 }
@@ -1798,4 +1803,4 @@ renderBest();
 updateRemovePBBtn();
 </script>
 </body>
-</html>
+</html>ss
