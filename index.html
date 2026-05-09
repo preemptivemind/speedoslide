@@ -139,6 +139,9 @@ input[type=range] {
   position: relative;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+  border: 1px solid rgba(0,0,0,0.25);
+}
+.tile.no-border { border-color: transparent; }
 }
 .tile:not(.empty):active { cursor: grabbing; }
 .tile.empty {
@@ -417,6 +420,13 @@ input[type=range] {
           </div>
         </div>
         <div class="tog-row">
+          <span class="tog-label">Border</span>
+          <div class="tog-group">
+            <button class="tog-btn active" id="tog-border-on"  onclick="setBorder(true)">On</button>
+            <button class="tog-btn"        id="tog-border-off" onclick="setBorder(false)">Off</button>
+          </div>
+        </div>
+        <div class="tog-row">
           <span class="tog-label">Laser</span>
           <div class="tog-group">
             <button class="tog-btn" id="tog-laser-on"  onclick="setLaser(true)">On</button>
@@ -428,7 +438,13 @@ input[type=range] {
           <div class="tog-group">
             <button class="tog-btn active" id="tog-rainbow" onclick="setScheme('none')">None</button>
             <button class="tog-btn"        id="tog-layer"   onclick="setScheme('layer')">Layer</button>
+          </div>
+        </div>
+        <div class="tog-row">
+          <span class="tog-label"></span>
+          <div class="tog-group">
             <button class="tog-btn"        id="tog-fringe"  onclick="setScheme('fringe')">Fringe</button>
+            <button class="tog-btn"        id="tog-ofringe" onclick="setScheme('ofringe')">Ofringe</button>
           </div>
         </div>
         <div class="slider-row">
@@ -547,6 +563,7 @@ function load() {
     scheme  = d.scheme  || 'none';
     control = d.control || 'click';
     laserOn = !!d.laserOn;
+    borderOn = d.borderOn !== false; // default true
     // Load session per size
     var sessions = d.sessions || {};
     var ns = sessions[N] || {};
@@ -570,7 +587,7 @@ function save() {
     var sessions = d.sessions || {};
     sessions[N] = {solveTimes:solveTimes, solveMoves:solveMoves, solveOpts:solveOpts, solveTps:solveTps};
     localStorage.setItem('15pz7', JSON.stringify({
-      N:N, scheme:scheme, control:control, laserOn:laserOn,
+      N:N, scheme:scheme, control:control, laserOn:laserOn, borderOn:borderOn,
       bests:bests, sessions:sessions
     }));
   } catch(e) {}
@@ -870,6 +887,15 @@ function tileStyle(idx, val, n) {
   if (scheme==='none')   return null;
   if (scheme==='layer')  return layerColor(idx,val,n);
   if (scheme==='fringe') return fringeColor(idx,val,n);
+  if (scheme==='ofringe') {
+    var gi = val - 1;
+    var gr = Math.floor(gi / n), gc = gi % n;
+    // Ring = min of row and col in goal position (top row or left col wins)
+    var ring = Math.min(gr, gc);
+    var totalRings = n - 1;
+    var hue = Math.round(ring * 300 / Math.max(totalRings - 1, 1));
+    return hslColor(hue);
+  }
   return null;
 }
 
@@ -1117,7 +1143,7 @@ function updateTileEl(el, idx) {
   } else {
     if(el._val===val) return;
     el._val=val;
-    el.className='tile';
+    el.className='tile'+(borderOn?'':' no-border');
     el.style.outline='';
     el.textContent=val;
     var c=tileStyle(idx,val,N);
@@ -1378,14 +1404,15 @@ function initEvents() {
 
   // DRAGSLIDE mode
   grid.addEventListener('pointerdown', function(e) {
-    if(control!=='drag' && control!=='hover') return;
+    if(control==='hover') { pHeld=true; return; } // button down = pause hover
+    if(control!=='drag') return;
     if(finished) return;
     var el=e.target.closest ? e.target.closest('.tile') : e.target;
     if(!el) return;
     e.preventDefault();
     pHeld=true; pLastIdx=-1;
     if(grid.setPointerCapture) grid.setPointerCapture(e.pointerId);
-    if(control==='drag' && !el.classList.contains('empty')){
+    if(!el.classList.contains('empty')){
       doMoveIdx(+el.dataset.idx);
       pLastIdx=emptyIdx;
     }
@@ -1394,56 +1421,60 @@ function initEvents() {
   var laserEl = document.getElementById('laser');
   var lastMoveTime = 0;
 
-  function showLaser(x, y) {
+  function showLaser(e) {
     if(!laserOn) return;
-    laserEl.style.left = x+'px';
-    laserEl.style.top  = y+'px';
+    laserEl.style.left = e.clientX+'px';
+    laserEl.style.top  = e.clientY+'px';
     laserEl.style.display = 'block';
   }
   function hideLaser() { laserEl.style.display='none'; }
 
   grid.addEventListener('pointermove', function(e) {
     if(control==='drag'||control==='hover') {
-      showLaser(e.clientX, e.clientY);
+      showLaser(e);
       lastMoveTime = Date.now();
     }
-    if((control!=='drag' && control!=='hover')||!pHeld||finished) return;
-    var rect=grid.getBoundingClientRect();
-    var ts=TILE_SIZES[N]||86;
-    var col=Math.floor((e.clientX-rect.left)/ts);
-    var row=Math.floor((e.clientY-rect.top)/ts);
-    if(col<0||col>=N||row<0||row>=N) return;
-    var idx=row*N+col;
-    if(idx===pLastIdx||tiles[idx]===0) return;
-    var e0=emptyIdx, er=Math.floor(e0/N), ec=e0%N;
-    var ir=Math.floor(idx/N), ic=idx%N;
-    if(ir!==er&&ic!==ec) return;
-    var count=doMoveIdx(idx);
-    if(count>0) pLastIdx=emptyIdx;
+    // DRAG: move tiles while pointer held
+    if(control==='drag' && pHeld && !finished) {
+      var rect=grid.getBoundingClientRect();
+      var ts=TILE_SIZES[N]||86;
+      var col=Math.floor((e.clientX-rect.left)/ts);
+      var row=Math.floor((e.clientY-rect.top)/ts);
+      if(col<0||col>=N||row<0||row>=N) return;
+      var idx=row*N+col;
+      if(idx===pLastIdx||tiles[idx]===0) return;
+      var e0=emptyIdx, er=Math.floor(e0/N), ec=e0%N;
+      var ir=Math.floor(idx/N), ic=idx%N;
+      if(ir!==er&&ic!==ec) return;
+      var count=doMoveIdx(idx);
+      if(count>0) pLastIdx=emptyIdx;
+    }
+    // HOVER: move tiles on pointermove when button NOT held
+    if(control==='hover' && !pHeld && !finished) {
+      var rect2=grid.getBoundingClientRect();
+      var ts2=TILE_SIZES[N]||86;
+      var col2=Math.floor((e.clientX-rect2.left)/ts2);
+      var row2=Math.floor((e.clientY-rect2.top)/ts2);
+      if(col2<0||col2>=N||row2<0||row2>=N) return;
+      var idx2=row2*N+col2;
+      if(tiles[idx2]===0) return;
+      var er2=Math.floor(emptyIdx/N), ec2=emptyIdx%N;
+      var ir2=Math.floor(idx2/N), ic2=idx2%N;
+      if(ir2!==er2&&ic2!==ec2) return;
+      doMoveIdx(idx2);
+    }
   });
   document.addEventListener('pointerup', function(){ pHeld=false; pLastIdx=-1; clearHL(); });
   document.addEventListener('pointercancel', function(){ pHeld=false; pLastIdx=-1; clearHL(); hideLaser(); });
   grid.addEventListener('pointerleave', function(){ hideLaser(); });
 
-  // Ghost click suppression — ignore clicks within 15ms of last pointermove in drag/hover
+  // Ghost click suppression
   grid.addEventListener('click', function(e) {
     if(control==='drag'||control==='hover') {
       if(Date.now()-lastMoveTime < 15) { e.stopImmediatePropagation(); return; }
     }
   }, true);
 
-  // HOVER mode — desktop mouseover (no press needed)
-  grid.addEventListener('mouseover', function(e) {
-    if(control!=='hover'||finished) return;
-    var el=e.target.closest ? e.target.closest('.tile') : e.target;
-    if(!el||el.classList.contains('empty')) return;
-    var idx=+el.dataset.idx;
-    if(tiles[idx]===0) return;
-    var e0=emptyIdx, er=Math.floor(e0/N), ec=e0%N;
-    var ir=Math.floor(idx/N), ic=idx%N;
-    if(ir!==er&&ic!==ec) return;
-    doMoveIdx(idx);
-  });
   grid.addEventListener('mouseleave', function(){ pLastIdx=-1; clearHL(); hideLaser(); });
 }
 
@@ -1661,6 +1692,15 @@ function setControl(c) {
 }
 
 var laserOn=false;
+var borderOn=true;
+
+function setBorder(on) {
+  borderOn=on;
+  document.getElementById('tog-border-on').classList.toggle('active', on);
+  document.getElementById('tog-border-off').classList.toggle('active', !on);
+  renderGrid();
+  save();
+}
 function setLaser(on) {
   laserOn=on;
   document.getElementById('tog-laser-on').classList.toggle('active', on);
@@ -1676,6 +1716,7 @@ function setScheme(s) {
   document.getElementById('tog-rainbow').classList.toggle('active',s==='none');
   document.getElementById('tog-layer').classList.toggle('active',  s==='layer');
   document.getElementById('tog-fringe').classList.toggle('active', s==='fringe');
+  document.getElementById('tog-ofringe').classList.toggle('active',s==='ofringe');
   renderGrid(); save();
 }
 
@@ -1716,6 +1757,7 @@ function onSizeChange(v) {
 //  KEYBOARD
 // ════════════════════════════════════════════════════════════
 document.addEventListener('keydown', function(e) {
+  if(e.key===' ') { e.preventDefault(); newGame(); return; }
   if(finished) return;
   var e0=ei(), er=Math.floor(e0/N), ec=e0%N, t=-1;
   if(e.key==='ArrowUp'   &&er<N-1) t=e0+N;
@@ -1731,7 +1773,7 @@ document.addEventListener('keydown', function(e) {
 load();
 document.getElementById('size-slider').value=N;
 document.getElementById('size-val').textContent=N+' × '+N;
-['tog-rainbow','tog-layer','tog-fringe'].forEach(function(id){
+['tog-rainbow','tog-layer','tog-fringe','tog-ofringe'].forEach(function(id){
   var s2=id.replace('tog-',''); if(s2==='rainbow') s2='none';
   document.getElementById(id).classList.toggle('active', scheme===s2);
 });
@@ -1739,6 +1781,8 @@ document.getElementById('size-val').textContent=N+' × '+N;
   document.getElementById(id).classList.toggle('active', control===id.replace('tog-',''));
 });
 (function(){ var g=document.getElementById('grid'); g.classList.toggle('laser-mode', laserOn&&(control==='drag'||control==='hover')); })();
+document.getElementById('tog-border-on').classList.toggle('active', borderOn);
+document.getElementById('tog-border-off').classList.toggle('active', !borderOn);
 document.getElementById('tog-laser-on').classList.toggle('active', laserOn);
 document.getElementById('tog-laser-off').classList.toggle('active', !laserOn);
 
